@@ -351,7 +351,7 @@ const PaymentWindow = () => {
 
   const currentStatus = statusStyles[session.status]
   const actionLoading = isProcessingPayment || smartAccountLoading || contractLoading || delegationLoading
-  const smartAccountReady = Boolean(smartAccountResult?.smartAccount)
+  const smartAccountReady = authenticated ? Boolean(smartAccountResult?.smartAccount) : true
 
   const combinedError = error || smartAccountError || contractError || delegationError
 
