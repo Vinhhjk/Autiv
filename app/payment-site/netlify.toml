@@ -1,0 +1,4 @@
+[build]
+  base = "app/payment-site"
+  command = "npm run build"
+  publish = "dist"
