@@ -4,10 +4,15 @@
 
 Autiv is an on-chain subscription service built for the **MetaMask Smart Accounts x Monad Dev Cook Off** hackathon. The platform empowers builders to launch recurring payment plans that settle directly on Monad testnet while abstracting away complex smart-account operations. We combine **MetaMask smart accounts and delegation flows** with **Envio HyperSync RPC** to verify on-chain payment events inside our API layer, ensuring fast and reliable subscription management.
 
+## LINKS:
+- Website: https://autiv.xyz
+- Dev: https://x.com/WagmiArc (Team size: 1)
+
 ## Project Overview
 
 - **Smart Accounts & Delegation**: Users approve subscriptions through MetaMask smart accounts while granting the Autiv manager delegated permissions for automated renewals.
 - **Real-time Event Verification**: HyperSync RPC from Envio lets the backend confirm payment finality before updating off-chain state.
+- **Automatic Recurring Payment**: Due subscriptions are automatically collected through an Agent.
 - **Unified Monorepo**: This repository contains the end-user frontend (`app/frontend/`), a payment widget site (`app/payment-site/`), Cloudflare Worker APIs (`worker/autiv/`), and supporting scripts.
 
 ## Repository Layout
@@ -40,7 +45,41 @@ VITE_DEMO_PROJECT_ID=
 VITE_WORKER_URL=
 VITE_PAYMENT_SITE=
 ```
+### Frontend (`app/frontend/src/config/chain.ts`)
+Change this AGENT_ADDRESS
+```
+export const AGENT_ADDRESS = '0x406b16A36926814305dF25757c93d298b639Bef0'
+```
+to the address that will be used to collect due subscriptions
+```
+export const AGENT_ADDRESS = '<YOUR AGENT ADDRESS HERE>'
+```
 
+### Smart contracts setup (`/contracts`)
+Add environment variables
+```
+EOA_PRIVATE_KEY = 
+ALCHEMY_POLICY_ID =
+DEPLOYER_PRIVATE_KEY=
+HYPERSYNC_API=
+MONAD_RPC_URL=
+DATABASE_URL
+```
+> Note: EOA_PRIVATE_KEY is private key for agent address that will later be used for collection payment. `DATABASE_URL` is a postgres url of your Xata Database.
+
+
+Deploy the Subscription Manager (replace the USDC address in `/contracts/contract/scripts/deploy-monad.ts` to your own token
+
+```bash
+npm run deploy:monad
+```
+Copy `SUBSCRIPTION_MANAGER` and `USDC_ADDRESS` values in `deployment-addresses.json` and prepare for database setup
+
+Collection due subscriptions (You are currently in /contracts)
+```bash
+cd/payment_processor
+node collect_payment.js
+```
 ### Payment Site (`app/payment-site/.env`)
 
 Use the same keys as the frontend when the payment widget needs to reference shared services:
@@ -52,25 +91,35 @@ VITE_ALCHEMY_GAS_POLICY_ID=
 VITE_WORKER_URL=
 ```
 
-### Cloudflare Worker (`worker/autiv/.dev.vars` or environment variables in the dashboard)
+
+### Database setup (`worker/autiv/.dev.vars` or environment variables in the dashboard)
 
 ```
 DATABASE_URL=
 DATABASE_URL_HTTPS=
 XATA_API_KEY=
-VITE_DEMO_PROJECT_ID=
-VITE_WORKER_URL=
 ```
 
-> **Note:** `DATABASE_URL` is the PostgreSQL connection string used by helper scripts, while `DATABASE_URL_HTTPS` is required by Xata’s HTTP API. The worker also reads `VITE_DEMO_PROJECT_ID` for bootstrap flows.
+> **Note:** `DATABASE_URL` is the PostgreSQL connection string used by helper scripts `migrate.js` to setup database, while `DATABASE_URL_HTTPS` is required by Xata’s HTTP API to test if needed. 
+
+### Cloudflare worker setup
+```
+PRIVY_APP_ID=
+DATABASE_URL_HTTPS=
+XATA_API_KEY=
+HYPERSYNC_API=
+```
+
+> **Note:** Use `npx wrangler secret put <ENV KEY HERE>` to add environment variables to Cloudflare.
+
 
 ## Setup Instructions
 
 ### 1. Clone and install dependencies
 
 ```bash
-git clone https://github.com/<your-org>/autiv.git
-cd autiv
+git clone https://github.com/Vinhhjk/Autiv.git
+cd Autiv
 
 # Install shared dependencies per workspace
 cd app/frontend && npm install
@@ -128,7 +177,7 @@ Autiv persists subscription metadata in Xata while mirroring critical identifier
 - Provision a Xata workspace and note the API key (`XATA_API_KEY`).
 - Create the necessary tables (`projects`, `subscription_plans`, `user_subscriptions`, etc.) following the schema defined in `worker/autiv/src/index.js` helpers.
 - Supply both `DATABASE_URL` and `DATABASE_URL_HTTPS` for scripts under `app/database/`.
-- Run helper scripts (e.g., `app/database/get-project-id.js`) to fetch seeded project IDs after migrations.
+- Copy the ID of the 1st project and add`VITE_DEMO_PROJECT_ID` to `.env` in `app/frontend`.
 
 > HyperSync RPC endpoints from Envio should be configured inside the worker to guarantee payment events are confirmed before database updates.
 
@@ -147,4 +196,4 @@ Autiv persists subscription metadata in Xata while mirroring critical identifier
 
 ## License
 
-This project is currently distributed for hackathon purposes. Contact the Autiv team for licensing questions.
+This project is currently distributed for hackathon purposes. Contact the https://x.com/WagmiArc for licensing questions.

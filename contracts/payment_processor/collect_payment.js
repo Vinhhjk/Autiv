@@ -13,10 +13,6 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const DATABASE_URL = process.env.DATABASE_URL
-  || process.env.PG_CONNECTION_STRING
-  || process.env.POSTGRES_URL
-  || 'postgresql://gv3q7l:xau_m9Lw7ckR80rxoo240RaecANUgjqHAXed@us-east-1.sql.xata.sh/autiv:main?sslmode=require';
-
 const MONAD_RPC_URL = process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
 const HYPERSYNC_RPC_URL = process.env.HYPERSYNC_API
   ? `https://monad-testnet.rpc.hypersync.xyz/${process.env.HYPERSYNC_API}`

@@ -25,6 +25,5 @@ export const monadTestnet = defineChain({
   testnet: true,
 })
 
-export const USDC_CONTRACT_ADDRESS = '0x7B35FBfa0635dbF7c4ACFA733585b90e3531888A'
 
 export const AGENT_ADDRESS = '0x406b16A36926814305dF25757c93d298b639Bef0'
