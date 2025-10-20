@@ -48,7 +48,7 @@ const ManageSubscription = () => {
         refreshTimeoutRef.current = window.setTimeout(() => {
           refreshSubscriptions()
           refreshTimeoutRef.current = null
-        }, 2000)
+        }, 5000)
       },
       onSubscriptionCreated: (user, planId) => {
         console.log('Subscription created event received:', { user, planId })

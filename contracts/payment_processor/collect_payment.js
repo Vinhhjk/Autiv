@@ -28,8 +28,8 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 let monadProvider;
 let hypersyncProvider;
 let agent;
-let subscriptionManagerContract;
 let environment;
+let subscriptionManagerAbi;
 let initialized = false;
 
 const tokenInterface = new ethers.Interface([
@@ -37,12 +37,7 @@ const tokenInterface = new ethers.Interface([
   'function decimals() view returns (uint8)',
 ]);
 
-const subscriptionManagerConfig = (async () => {
-  const deployment = await import('../deployment-addresses.json', { with: { type: 'json' } });
-  return {
-    SUBSCRIPTION_MANAGER: deployment.default?.SUBSCRIPTION_MANAGER || deployment.SUBSCRIPTION_MANAGER,
-  };
-})();
+const subscriptionManagerContracts = new Map();
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -100,13 +95,6 @@ async function withRateLimit(fn, label = 'rpc') {
 
 async function initialize() {
   if (initialized) return;
-
-  const deployment = await subscriptionManagerConfig;
-  console.log('Deployment config:', deployment);
-  if (!deployment?.SUBSCRIPTION_MANAGER) {
-    throw new Error('SUBSCRIPTION_MANAGER address not found in deployment config');
-  }
-
   console.log('Initializing payment collector...');
 
   monadProvider = new ethers.JsonRpcProvider(MONAD_RPC_URL, {
@@ -131,16 +119,28 @@ async function initialize() {
   }
 
   const subscriptionManagerArtifact = await import('../SubscriptionManager.json', { with: { type: 'json' } });
-  const abi = subscriptionManagerArtifact.default?.abi || subscriptionManagerArtifact.abi;
-
-  subscriptionManagerContract = new ethers.Contract(
-    deployment.SUBSCRIPTION_MANAGER,
-    abi,
-    agent
-  );
+  subscriptionManagerAbi = subscriptionManagerArtifact.default?.abi || subscriptionManagerArtifact.abi;
 
   initialized = true;
   console.log('Payment collector initialized with agent', agent.address);
+}
+
+function getSubscriptionManagerContract(address) {
+  if (!address) {
+    throw new Error('Subscription manager address missing for subscription');
+  }
+  if (!subscriptionManagerAbi) {
+    throw new Error('Subscription manager ABI not loaded');
+  }
+
+  if (!subscriptionManagerContracts.has(address)) {
+    subscriptionManagerContracts.set(
+      address,
+      new ethers.Contract(address, subscriptionManagerAbi, agent)
+    );
+  }
+
+  return subscriptionManagerContracts.get(address);
 }
 
 async function fetchDueSubscriptions(limit) {
@@ -204,29 +204,6 @@ async function fetchDueSubscriptions(limit) {
   } finally {
     client.release();
   }
-}
-
-function normalizeDelegation(input) {
-  if (!input) throw new Error('Delegation payload missing');
-
-  const saltValue = typeof input.salt === 'string'
-    ? input.salt.startsWith('0x')
-      ? BigInt(input.salt)
-      : BigInt(input.salt)
-    : BigInt(input.salt);
-
-  return {
-    delegate: input.delegate,
-    delegator: input.delegator,
-    authority: input.authority,
-    caveats: (input.caveats || []).map(c => ({
-      enforcer: c.enforcer,
-      terms: c.terms,
-      args: c.args || '0x',
-    })),
-    salt: saltValue,
-    signature: input.signature,
-  };
 }
 
 const tokenMetadataCache = new Map();
@@ -304,11 +281,20 @@ async function processSubscription(subscription) {
     delegationDataRaw,
     userRecordId,
     developerRecordId,
+    subscriptionManager,
   } = subscription;
 
   if (!delegationDataRaw) {
-    console.log(`Skipping ${smartAccount} – missing delegation data`);
+    console.log(`Skipping ${smartAccount} - missing delegation data`);
     return { status: 'skipped', reason: 'no_delegation' };
+  }
+
+  let managerContract;
+  try {
+    managerContract = getSubscriptionManagerContract(subscriptionManager);
+  } catch (error) {
+    console.error('Skipping subscription due to missing manager contract', subscriptionId, error);
+    return { status: 'error', error };
   }
 
   let delegationData;
@@ -321,15 +307,13 @@ async function processSubscription(subscription) {
 
   const signedApproveDelegation = delegationData.signedApproveDelegation;
   const signedProcessPaymentDelegation = delegationData.signedProcessPaymentDelegation;
-  // console.log('Approve: ', signedApproveDelegation)
-  // console.log('Process: ', signedProcessPaymentDelegation)
   const planDetails = await withRateLimit(
-    () => subscriptionManagerContract.getPlan(contractPlanId),
+    () => managerContract.getPlan(contractPlanId),
     'subscription-plan'
   );
 
   const paymentDue = await withRateLimit(
-    () => subscriptionManagerContract.isPaymentDue(smartAccount),
+    () => managerContract.isPaymentDue(smartAccount),
     'is-payment-due'
   );
 
@@ -341,11 +325,11 @@ async function processSubscription(subscription) {
   const planTokenAddress = planDetails.tokenAddress || tokenAddress;
 
   const approveCalldata = tokenInterface.encodeFunctionData('approve', [
-    planDetails.subscriptionManager || planDetails.subscriptionManagerAddress || subscriptionManagerContract.target,
+    planDetails.subscriptionManager || planDetails.subscriptionManagerAddress || managerContract.target,
     planDetails.price,
   ]);
 
-  const processPaymentCalldata = subscriptionManagerContract.interface.encodeFunctionData('processPayment', [smartAccount]);
+  const processPaymentCalldata = managerContract.interface.encodeFunctionData('processPayment', [smartAccount]);
 
   const approveExecution = createExecution({
     target: planTokenAddress,
@@ -354,7 +338,7 @@ async function processSubscription(subscription) {
   });
 
   const processPaymentExecution = createExecution({
-    target: subscriptionManagerContract.target,
+    target: managerContract.target,
     value: 0n,
     callData: processPaymentCalldata,
   });
@@ -376,7 +360,7 @@ async function processSubscription(subscription) {
     'send-tx-combined'
   );
 
-  console.log(`Sent combined tx ${combinedTx.hash} for ${smartAccount}`);
+  console.log(`Tx sent: ${combinedTx.hash} for ${smartAccount}`);
   const receipt = await waitForReceipt(combinedTx.hash);
 
   try {
@@ -395,7 +379,7 @@ async function processSubscription(subscription) {
       periodSeconds: periodSecondsOnChain,
     });
 
-    console.log(`✓ Payment confirmed for ${smartAccount} in block ${receipt.blockNumber}`);
+    console.log(`Payment confirmed for ${smartAccount} in block ${receipt.blockNumber}`);
     return { status: 'paid', txHash: combinedTx.hash, periodSeconds: periodSecondsOnChain };
   } catch (error) {
     console.error('Failed to update payment records for', smartAccount, error);

@@ -58,7 +58,12 @@ class MonadWebSocketService {
         console.log('Connected to Monad WebSocket');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
-        this.subscribeToContractEvents();
+
+        if (this.subscriptionManagerAddresses.length > 0) {
+          this.subscribeToContractEvents();
+        } else {
+          console.log('Awaiting subscription manager addresses before subscribing');
+        }
       };
 
       this.ws.onmessage = (event) => {
@@ -91,7 +96,6 @@ class MonadWebSocketService {
 
     const addresses = this.subscriptionManagerAddresses;
     if (!addresses.length) {
-      console.warn('No subscription manager addresses configured for WebSocket subscription');
       return;
     }
 
@@ -224,11 +228,10 @@ class MonadWebSocketService {
 
     this.subscriptionManagerAddresses = normalized;
 
-    if (this.ws) {
-      this.disconnect();
-      if (this.subscriptionManagerAddresses.length > 0) {
-        this.connect();
-      }
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.subscribeToContractEvents();
+    } else if (!this.ws && this.subscriptionManagerAddresses.length > 0) {
+      this.connect();
     }
   }
 
