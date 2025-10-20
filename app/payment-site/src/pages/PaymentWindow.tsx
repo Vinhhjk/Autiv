@@ -351,7 +351,7 @@ const PaymentWindow = () => {
 
   const currentStatus = statusStyles[session.status]
   const actionLoading = isProcessingPayment || smartAccountLoading || contractLoading || delegationLoading
-  const smartAccountReady = authenticated ? Boolean(smartAccountResult?.smartAccount) : true
+  const smartAccountReady = Boolean(smartAccountResult?.smartAccount)
 
   const combinedError = error || smartAccountError || contractError || delegationError
 
@@ -359,12 +359,12 @@ const PaymentWindow = () => {
     if (session.status === 'paid') return 'Payment Complete'
     if (session.status === 'expired') return 'Session Expired'
     if (!authenticated) return 'Login to Continue'
-    if (!smartAccountReady) return 'Preparing Smart Account...'
     if (delegationStep === 'creating') return 'Creating Delegation...'
     if (delegationStep === 'signing') return 'Signing Delegation...'
     if (delegationStep === 'subscribing') return 'Submitting Payment...'
     if (delegationStep === 'finalizing') return 'Finalizing...'
     if (actionLoading) return 'Processing...'
+    if (!smartAccountReady) return 'Prepare Smart Account'
     return 'Pay Now'
   }
 
@@ -452,7 +452,7 @@ const PaymentWindow = () => {
               <div className="mt-6 space-y-4">
                 <button
                   onClick={authenticated ? handleRealPayment : login}
-                  disabled={session.status === 'paid' || session.status === 'expired' || actionLoading || !smartAccountReady}
+                  disabled={session.status === 'paid' || session.status === 'expired' || actionLoading}
                   className="retro-button w-full py-4 font-black text-lg"
                   style={{
                     backgroundColor: session.status === 'paid'
@@ -460,8 +460,8 @@ const PaymentWindow = () => {
                       : authenticated
                         ? '#feca57'
                         : '#836EF9',
-                    opacity: session.status === 'expired' || !smartAccountReady ? 0.6 : 1,
-                    cursor: session.status === 'expired' || !smartAccountReady ? 'not-allowed' : 'pointer'
+                    opacity: session.status === 'expired' ? 0.6 : 1,
+                    cursor: session.status === 'expired' ? 'not-allowed' : 'pointer'
                   }}
                 >
                   {getActionLabel()}
