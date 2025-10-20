@@ -25,7 +25,6 @@ const ManageSubscription = () => {
 
   const refreshSubscriptions = useCallback(async () => {
     if (authenticated && user?.email?.address) {
-      console.log('Refreshing subscriptions for user:', user.email.address)
       await getUserSubscriptions()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -40,8 +39,7 @@ const ManageSubscription = () => {
   useSubscriptionWebSocket(
     smartAccount?.address || address,
     {
-      onPaymentProcessed: (user, amount, timestamp) => {
-        console.log('Payment processed event received:', { user, amount, timestamp })
+      onPaymentProcessed: () => {
         if (refreshTimeoutRef.current) {
           window.clearTimeout(refreshTimeoutRef.current)
         }
@@ -50,24 +48,19 @@ const ManageSubscription = () => {
           refreshTimeoutRef.current = null
         }, 5000)
       },
-      onSubscriptionCreated: (user, planId) => {
-        console.log('Subscription created event received:', { user, planId })
+      onSubscriptionCreated: () => {
         refreshSubscriptions()
       },
-      onSubscriptionCancelled: (user) => {
-        console.log('Subscription cancelled event received:', { user })
+      onSubscriptionCancelled: () => {
       },
     },
     subscriptionManagerAddresses
   )
 
   useSubscriptionExpiryMonitor(subscriptions, () => {
-    console.log('Subscription expired - refreshing data...')
     refreshSubscriptions()
   })
 
-  // Subscriptions are automatically loaded by AuthContext and provided via useUserSubscriptions
-  // No need to manually call getUserSubscriptions() on mount
 
   // Load smart account from localStorage
   useEffect(() => {

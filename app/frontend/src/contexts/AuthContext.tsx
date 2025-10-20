@@ -210,19 +210,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentEmail = user?.email?.address;
       const walletAddress = user?.wallet?.address;
       
-      console.log("AuthContext useEffect triggered:", {
-        authenticated,
-        email: currentEmail,
-        walletAddress,
-        isInitialized,
-        isLoading,
-        isProcessing: isProcessingRef.current,
-        lastInitializedEmail: lastInitializedEmail.current,
-      });
 
       // Reset state when user changes
       if (lastInitializedEmail.current !== currentEmail) {
-        console.log("User changed, resetting auth state");
         setIsInitialized(false);
         setUserInfo(null);
         setSubscriptions([]);
@@ -239,7 +229,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isProcessingRef.current ||
         lastInitializedEmail.current === currentEmail
       ) {
-        console.log("Skipping initialization - conditions not met");
         return;
       }
 
@@ -251,31 +240,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let hasValidCache = false;
 
       if (cachedUserInfo && cachedUserInfo.email === currentEmail) {
-        console.log("Loaded user info from cache:", cachedUserInfo);
         setUserInfo(cachedUserInfo);
         hasValidCache = true;
       }
 
       if (cachedSubscriptions) {
-        console.log("Loaded subscriptions from cache");
+        // console.log("Loaded subscriptions from cache");
         setSubscriptions(cachedSubscriptions);
       }
 
       if (cachedDeveloperInfo) {
-        console.log("Loaded developer info from cache");
+        // console.log("Loaded developer info from cache");
         setDeveloperInfo(cachedDeveloperInfo);
       }
 
       // If we have valid cached user info and subscriptions, we're done
       if (hasValidCache && cachedSubscriptions) {
-        console.log("All data loaded from cache, skipping API calls");
+        // console.log("All data loaded from cache, skipping API calls");
         setIsInitialized(true);
         lastInitializedEmail.current = currentEmail;
         return;
       }
 
       // Otherwise, fetch from API
-      console.log("Cache miss or incomplete, fetching from API for:", currentEmail);
+      // console.log("Cache miss or incomplete, fetching from API for:", currentEmail);
       isProcessingRef.current = true;
       setIsLoading(true);
 
@@ -294,7 +282,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Only fetch user info if not cached
         if (!hasValidCache) {
-          console.log("Fetching user info from API for:", currentEmail);
           const userResult = await apiService.getUserInfo();
 
           if (
@@ -302,11 +289,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             userResult.data?.found &&
             userResult.data.user
           ) {
-            console.log("User found in database:", userResult.data.user);
+            // console.log("User found in database:", userResult.data.user);
             setUserInfo(userResult.data.user);
             setCachedData(CACHE_KEYS.USER_INFO, userResult.data.user);
           } else if (userResult.success && !userResult.data?.found) {
-            console.log("User not found, creating new user...");
+            // console.log("User not found, creating new user...");
             const createResult = await apiService.createUser({
               email: currentEmail,
               wallet_address: walletAddress || "",
@@ -314,7 +301,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
 
             if (createResult.success && createResult.data) {
-              console.log("User created successfully:", createResult.data);
+              // console.log("User created successfully:", createResult.data);
               setUserInfo(createResult.data);
               setCachedData(CACHE_KEYS.USER_INFO, createResult.data);
             } else {
@@ -327,7 +314,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Only fetch subscriptions if not cached
         if (!cachedSubscriptions) {
-          console.log("Fetching subscriptions from API for:", currentEmail);
           const subscriptionsResult = await apiService.getUserSubscriptions();
           if (subscriptionsResult.success && subscriptionsResult.data) {
             setSubscriptions(subscriptionsResult.data.subscriptions);
@@ -337,7 +323,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Only fetch developer info if not cached
         if (!cachedDeveloperInfo) {
-          console.log("Fetching developer info from API for:", currentEmail);
+          // console.log("Fetching developer info from API for:", currentEmail);
           const developerResult = await apiService.getDeveloperInfo();
           if (developerResult.success && developerResult.data?.found && developerResult.data.developer) {
             setDeveloperInfo(developerResult.data.developer);

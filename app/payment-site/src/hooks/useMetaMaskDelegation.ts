@@ -40,7 +40,7 @@ export const useMetaMaskDelegation = () => {
     setError(null)
 
     try {
-      console.log('Smart Account:', smartAccountAddress)
+      // console.log('Smart Account:', smartAccountAddress)
       // Get delegation environment for Monad Testnet
       const environment = getDeleGatorEnvironment(monadTestnet.id)
       if (!environment) {
@@ -49,14 +49,14 @@ export const useMetaMaskDelegation = () => {
 
       // Plan data for delegation
       const tokenAddress = planData.tokenAddress
-      const periodAmount = BigInt(Math.floor(planData.price * 1e18)) // Convert to wei
+      // const periodAmount = BigInt(Math.floor(planData.price * 1e18)) // Convert to wei
 
-      console.log('Creating TWO separate delegations:', {
-        tokenAddress,
-        periodAmount: periodAmount.toString(),
-        smartAccountAddress,
-        subscriptionManager: subscriptionManagerAddress
-      })
+      // console.log('Creating TWO separate delegations:', {
+      //   tokenAddress,
+      //   periodAmount: periodAmount.toString(),
+      //   smartAccountAddress,
+      //   subscriptionManager: subscriptionManagerAddress
+      // })
 
       const currentTime = Math.floor(Date.now() / 1000);
 
@@ -86,7 +86,7 @@ export const useMetaMaskDelegation = () => {
         salt: `0x${(currentTime + 1).toString(16)}`, // Different salt
       })
 
-      console.log('Two delegations created successfully!')
+      // console.log('Two delegations created successfully!')
 
       return {
         approveDelegation,
@@ -108,7 +108,7 @@ export const useMetaMaskDelegation = () => {
     }
 
     try {
-      console.log('Signing delegation with MetaMask Smart Account...')
+      // console.log('Signing delegation with MetaMask Smart Account...')
 
       // Check if signDelegation method exists
       if (!smartAccount.signDelegation) {
@@ -157,18 +157,18 @@ export const useMetaMaskDelegation = () => {
       const modes = [ExecutionMode.SingleDefault]
       const executions = [execution]
 
-      console.log('Delegation redemption data:', {
-        delegations: delegations.length,
-        modes,
-        executions: executions.length
-      })
+      // console.log('Delegation redemption data:', {
+      //   delegations: delegations.length,
+      //   modes,
+      //   executions: executions.length
+      // })
 
       // Get delegation environment
       const environment = getDeleGatorEnvironment(monadTestnet.id)
       if (!environment) {
         throw new Error('Delegation environment not found')
       }
-      console.log('Delegation ready for automatic execution!')
+      // console.log('Delegation ready for automatic execution!')
 
       return {
         delegations,

@@ -58,7 +58,6 @@ export const useSubscriptionWebSocket = (
         return;
       }
 
-      console.log(`WebSocket event for ${userAddress}:`, event);
 
       // Call appropriate callback based on event type
       switch (event.type) {
@@ -97,7 +96,6 @@ export const useSubscriptionWebSocket = (
     monadWebSocket.addEventListener('SubscriptionCreated', handleSubscriptionEvent);
     monadWebSocket.addEventListener('SubscriptionCancelled', handleSubscriptionEvent);
 
-    console.log(`WebSocket listeners added for address: ${userAddress}`);
 
     // Cleanup function
     return () => {
@@ -105,7 +103,6 @@ export const useSubscriptionWebSocket = (
       monadWebSocket.removeEventListener('SubscriptionCreated', handleSubscriptionEvent);
       monadWebSocket.removeEventListener('SubscriptionCancelled', handleSubscriptionEvent);
       
-      console.log(`WebSocket listeners removed for address: ${userAddress}`);
     };
   }, [userAddress]);
 

@@ -55,14 +55,11 @@ class MonadWebSocketService {
       this.ws = new WebSocket(this.config.url);
       
       this.ws.onopen = () => {
-        console.log('Connected to Monad WebSocket');
         this.isConnecting = false;
         this.reconnectAttempts = 0;
 
         if (this.subscriptionManagerAddresses.length > 0) {
           this.subscribeToContractEvents();
-        } else {
-          console.log('Awaiting subscription manager addresses before subscribing');
         }
       };
 
@@ -70,8 +67,7 @@ class MonadWebSocketService {
         this.handleMessage(event.data);
       };
 
-      this.ws.onclose = (event) => {
-        console.log('WebSocket connection closed:', event.code, event.reason);
+      this.ws.onclose = () => {
         this.isConnecting = false;
         this.scheduleReconnect();
       };
@@ -121,7 +117,6 @@ class MonadWebSocketService {
     };
 
     this.ws.send(JSON.stringify(subscriptionRequest));
-    console.log('Subscribed to SubscriptionManager events');
   }
 
 
@@ -164,7 +159,6 @@ class MonadWebSocketService {
         transactionHash: log.transactionHash
       };
 
-      console.log('Received blockchain event:', event);
       this.emitEvent(eventType as SubscriptionEvent['type'], event);
 
     } catch (error) {
@@ -247,7 +241,6 @@ class MonadWebSocketService {
     this.reconnectAttempts++;
     const delay = this.config.reconnectInterval * Math.pow(2, this.reconnectAttempts - 1); // Exponential backoff
 
-    console.log(`Scheduling reconnection attempt ${this.reconnectAttempts} in ${delay}ms`);
     
     this.reconnectTimeout = setTimeout(() => {
       this.connect();

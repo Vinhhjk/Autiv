@@ -30,7 +30,6 @@ export const useSubscriptionExpiryMonitor = (
       return
     }
 
-    console.log('Starting subscription expiry monitor for', activeSubscriptions.length, 'subscriptions')
 
     // Check every second if any subscription has expired
     intervalRef.current = setInterval(() => {
@@ -42,8 +41,8 @@ export const useSubscriptionExpiryMonitor = (
 
         // Only trigger callback if subscription just expired (wasn't expired before)
         if (isExpired && !wasExpiredBefore) {
-          console.log('Subscription expired:', subscription.id, 'at', now.toISOString())
-          console.log('End date was:', subscription.endDate.toISOString())
+          // console.log('Subscription expired:', subscription.id, 'at', now.toISOString())
+          // console.log('End date was:', subscription.endDate.toISOString())
           lastCheckRef.current[subscription.id] = true
           onExpiry()
         } else if (!isExpired) {
@@ -56,7 +55,6 @@ export const useSubscriptionExpiryMonitor = (
     // Cleanup on unmount or when subscriptions change
     return () => {
       if (intervalRef.current) {
-        console.log('Stopping subscription expiry monitor')
         clearInterval(intervalRef.current)
       }
     }

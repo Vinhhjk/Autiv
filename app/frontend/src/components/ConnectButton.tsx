@@ -69,30 +69,27 @@ export default function ConnectButton({ isSidebarOpen = false, onExportWallet }:
             // Check if smart account already exists in localStorage
             const existingSmartAccount = localStorage.getItem('autiv.smartAccount');
             if (existingSmartAccount) {
-                console.log('Smart account already exists for this user');
+                // console.log('Smart account already exists for this user');
                 return;
             }
             
             // Check if we already have a smart account result
             if (smartAccountResult) {
-                console.log('Smart account already created in this session');
                 return;
             }
 
             // Check if another instance is already creating a smart account
             if (isCreatingSmartAccount) {
-                console.log('Smart account creation already in progress...');
                 return;
             }
             
             // Wait for wallet client to be ready
             if (!isWalletClientReady) {
-                console.log('Waiting for wallet client to be ready...');
+                // console.log('Waiting for wallet client to be ready...');
                 return;
             }
             
             try {
-                console.log('Auto-creating smart account for new user...');
                 isCreatingSmartAccount = true;
                 
                 const result = await createSmartAccount();
@@ -104,7 +101,6 @@ export default function ConnectButton({ isSidebarOpen = false, onExportWallet }:
                         createdAt: new Date().toISOString()
                     }));
                     
-                    console.log('Smart account created and stored:', result.smartAccount.address);
                 }
             } catch (error) {
                 console.error('Failed to auto-create smart account:', error);

@@ -133,12 +133,6 @@ class ApiService {
     headers: Record<string, string> = {}
   ): Promise<ApiResponse<T>> {
     try {
-      console.log("Making API request:", {
-        endpoint,
-        url: `${API_BASE_URL}${endpoint}`,
-        method: options.method || 'POST',
-      });
-
       const optionHeaders = options.headers
         ? Object.fromEntries(new Headers(options.headers as HeadersInit).entries())
         : {};

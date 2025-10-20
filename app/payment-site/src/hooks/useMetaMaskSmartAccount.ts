@@ -67,7 +67,7 @@ export const useMetaMaskSmartAccount = () => {
           
           setPrivyWalletClient(client)
           hasSetActiveWallet.current = true
-          console.log('✓ Wallet client created from Privy provider!')
+          // console.log('Wallet client created from Privy provider!')
         }
       } catch (err) {
         console.error('Failed to create wallet client from Privy:', err)
@@ -83,12 +83,12 @@ export const useMetaMaskSmartAccount = () => {
     const isReady = !!(effectiveClient?.account)
     setWalletClientReady(isReady)
     
-    if (isReady && !walletClientReady) {
-      console.log('✓ Wallet client is ready!', {
-        source: wagmiWalletClient ? 'wagmi' : 'privy',
-        address: effectiveClient?.account?.address
-      })
-    }
+    // if (isReady && !walletClientReady) {
+    //   console.log('Wallet client is ready!', {
+    //     source: wagmiWalletClient ? 'wagmi' : 'privy',
+    //     address: effectiveClient?.account?.address
+    //   })
+    // }
   }, [wagmiWalletClient, privyWalletClient, walletClientReady])
 
   const createSmartAccount = useCallback(async (): Promise<SmartAccountResult | null> => {
@@ -98,13 +98,12 @@ export const useMetaMaskSmartAccount = () => {
     
     // Prevent duplicate creation
     if (isCreatingSmartAccount.current) {
-      console.log('⏳ Smart account creation already in progress, skipping...')
       return smartAccountResult
     }
     
     // If we already have a smart account result, return it
     if (smartAccountResult) {
-      console.log('✓ Smart account already exists in state, reusing:', smartAccountResult.address)
+      // console.log('Smart account already exists in state, reusing:', smartAccountResult.address)
       return smartAccountResult
     }
     
@@ -120,7 +119,7 @@ export const useMetaMaskSmartAccount = () => {
       throw new Error('Wallet account not ready. Please wait a moment and try again.')
     }
     
-    console.log('✓ Wallet client is ready with account:', localWalletClient.account.address)
+    // console.log('Wallet client is ready with account:', localWalletClient.account.address)
 
     isCreatingSmartAccount.current = true
     setIsLoading(true)
@@ -142,12 +141,6 @@ export const useMetaMaskSmartAccount = () => {
 
       // After null checks, we know the account exists, so we can safely use the wallet client
 
-      console.log('Wallet client info:', {
-        hasAccount: !!localWalletClient.account,
-        accountAddress: localWalletClient.account.address,
-        accountType: localWalletClient.account.type,
-        chainId: localWalletClient.chain?.id
-      })
 
       // Create MetaMask Smart Account using Hybrid implementation
       const ownerAddress = localWalletClient.account.address
@@ -163,12 +156,12 @@ export const useMetaMaskSmartAccount = () => {
       // Use the MetaMask smart account directly
       const smartAccount = metaMaskSmartAccount;
       
-      console.log('Smart account structure:', {
-        hasAddress: !!smartAccount.address,
-        hasClient: !!smartAccount.client,
-        hasSignUserOperation: typeof smartAccount.signUserOperation === 'function',
-        type: smartAccount.type
-      })
+      // console.log('Smart account structure:', {
+      //   hasAddress: !!smartAccount.address,
+      //   hasClient: !!smartAccount.client,
+      //   hasSignUserOperation: typeof smartAccount.signUserOperation === 'function',
+      //   type: smartAccount.type
+      // })
 
       console.log('Smart Account Address:', smartAccount.address)
 
@@ -220,9 +213,6 @@ export const useMetaMaskSmartAccount = () => {
       }
       
       try {
-        const parsed = JSON.parse(storedData)
-        console.log('Restoring smart account from storage:', parsed.address)
-        
         hasLoadedFromStorage.current = true
         // Recreate the smart account instance (required for each hook mount)
         await createSmartAccount()

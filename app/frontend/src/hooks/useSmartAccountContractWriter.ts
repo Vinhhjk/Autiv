@@ -170,7 +170,6 @@ export const useSmartAccountContractWriter = () => {
       const priceInWei = parseUnits(planPrice.toString(), 18)
 
       // --- Parallelized reads ---
-      console.log('=== Checking balance + existing subscription in parallel ===')
       const [smartAccountBalance, existingSubscription] = await Promise.all([
         publicClient.readContract({
           address: resolvedTokenAddress,
@@ -222,7 +221,6 @@ export const useSmartAccountContractWriter = () => {
       calls.push({ to: resolvedTokenAddress, data: approveCalldata })
       // 2) Optional cancel
       if (existingSubscription && typeof existingSubscription === 'object' && 'active' in existingSubscription && (existingSubscription as SubscriptionData).active) {
-        console.log('User has active subscription — cancelling first...')
         const cancelCallData = encodeFunctionData({
           abi: SubscriptionManagerABI.abi,
           functionName: 'cancelSubscription',
@@ -286,12 +284,12 @@ export const useSmartAccountContractWriter = () => {
           });
 
           if (subscriptionResult.success) {
-            console.log('Smart Account subscription and payment recorded in database:', subscriptionResult.data?.message);
+            console.log('Smart Account subscription and payment recorded');
             if (subscriptionResult.data?.payment_id) {
               console.log('Payment ID:', subscriptionResult.data.payment_id);
             }
           } else {
-            console.error('Failed to record Smart Account subscription in database:', subscriptionResult.error);
+            console.error('Failed to record Smart Account subscription:', subscriptionResult.error);
           }
         } catch (apiError) {
           console.error('API call failed:', apiError);
@@ -411,7 +409,6 @@ export const useSmartAccountContractWriter = () => {
       const calls: { to: `0x${string}`; data: `0x${string}` }[] = []
 
       // 1. Fetch delegation from database (if exists)
-      console.log('Fetching delegation from database...')
       let delegation: unknown = null
       try {
         const delegationResponse = await apiService.getUserDelegation({
@@ -419,14 +416,10 @@ export const useSmartAccountContractWriter = () => {
           subscription_manager_address: resolvedSubscriptionManagerAddress,
         })
 
-        console.log('Delegation API response:', delegationResponse)
 
         if (delegationResponse.success && delegationResponse.data) {
           const apiData = delegationResponse.data as unknown as { success: boolean; data: { delegation: unknown } }
           delegation = apiData.data.delegation
-          console.log('Delegation found:', delegation)
-        } else {
-          console.log('No delegation found in response')
         }
       } catch (error) {
         console.log('Error fetching delegation:', error)
@@ -468,10 +461,8 @@ export const useSmartAccountContractWriter = () => {
       // 3. Add disable delegation call if delegation exists (before sending transaction)
       const delegationForDisable = extractDelegationForDisable(delegation)
       if (delegationForDisable) {
-        console.log('Adding delegation disable to transaction...')
         const environment = getDeleGatorEnvironment(MONAD_TESTNET_CHAIN_ID)
         if (environment) {
-          console.log('DeleGator environment found:', environment.DelegationManager)
           try {
             const disableDelegationCalldata = DelegationManager.encode.disableDelegation({
               delegation: {
@@ -492,11 +483,7 @@ export const useSmartAccountContractWriter = () => {
             console.error('Failed to encode disable delegation:', encodeError)
             // Don't throw - continue with cancel operations
           }
-        } else {
-          console.warn('DeleGator environment not found for chain ID:', MONAD_TESTNET_CHAIN_ID)
         }
-      } else if (delegation) {
-        console.warn('Delegation data missing required fields, skipping disable step')
       }
 
       // Send transaction: revoke + cancel + disable delegation (if applicable)
@@ -523,14 +510,15 @@ export const useSmartAccountContractWriter = () => {
           });
 
           if (cancellationResult.success) {
-            console.log('Smart Account subscription cancellation recorded in database:', cancellationResult.data?.message);
+            console.log('Smart Account subscription cancellation recorded');
           } else {
-            console.error('Failed to record Smart Account cancellation in database:', cancellationResult.error);
+            console.error('Failed to record Smart Account cancellation:', cancellationResult.error);
           }
         } catch (apiError) {
           console.error('API call failed:', apiError);
         }
       }
+
 
       return txHash
 

@@ -52,7 +52,6 @@ const DeveloperDashboard = () => {
       }
     }
     
-    console.log('🌐 Loading projects from API')
     loadingRef.current = true
     setIsLoading(true)
     try {

@@ -105,7 +105,7 @@ export const useSmartAccountContractWriter = () => {
       const priceInWei = parseUnits(planPrice.toString(), 18)
 
       // --- Parallelized reads ---
-      console.log('=== Checking balance + existing subscription in parallel ===')
+      // console.log('=== Checking balance + existing subscription in parallel ===')
       const [smartAccountBalance, existingSubscription] = await Promise.all([
         publicClient.readContract({
           address: tokenAddress as `0x${string}`,
@@ -157,7 +157,7 @@ export const useSmartAccountContractWriter = () => {
       calls.push({ to: tokenAddress as `0x${string}`, data: approveCalldata })
       // 2) Optional cancel
       if (existingSubscription && typeof existingSubscription === 'object' && 'active' in existingSubscription && (existingSubscription as SubscriptionData).active) {
-        console.log('User has active subscription — cancelling first...')
+        // console.log('User has active subscription — cancelling first...')
         const cancelCallData = encodeFunctionData({
           abi: SubscriptionManagerABI.abi,
           functionName: 'cancelSubscription',
@@ -221,7 +221,7 @@ export const useSmartAccountContractWriter = () => {
           });
 
           if (subscriptionResult.success) {
-            console.log('Smart Account subscription and payment recorded in database:', subscriptionResult.data?.message);
+            // console.log('Smart Account subscription and payment recorded in database:', subscriptionResult.data?.message);
             if (subscriptionResult.data?.payment_id) {
               console.log('Payment ID:', subscriptionResult.data.payment_id);
             }
@@ -264,7 +264,7 @@ export const useSmartAccountContractWriter = () => {
       const calls: { to: `0x${string}`; data: `0x${string}` }[] = []
 
       // 1. Fetch delegation from database (if exists)
-      console.log('Fetching delegation from database...')
+      // console.log('Fetching delegation from database...')
       let delegation: unknown = null
       try {
         const delegationResponse = await apiService.getUserDelegation({
@@ -272,12 +272,12 @@ export const useSmartAccountContractWriter = () => {
           subscription_manager_address: subscriptionManagerAddress,
         })
 
-        console.log('Delegation API response:', delegationResponse)
+        // console.log('Delegation API response:', delegationResponse)
 
         if (delegationResponse.success && delegationResponse.data) {
           const apiData = delegationResponse.data as unknown as { success: boolean; data: { delegation: unknown } }
           delegation = apiData.data.delegation
-          console.log('Delegation found:', delegation)
+          // console.log('Delegation found:', delegation)
         } else {
           console.log('No delegation found in response')
         }
@@ -317,10 +317,8 @@ export const useSmartAccountContractWriter = () => {
       calls.push({ to: subscriptionManagerAddress, data: cancelCallData })
       // 3. Add disable delegation call if delegation exists
       if (delegation) {
-        console.log('🔒 Adding delegation disable to transaction...')
         const environment = getDeleGatorEnvironment(MONAD_TESTNET_CHAIN_ID)
         if (environment) {
-          console.log('DeleGator environment found:', environment.DelegationManager)
           try {
             const disableDelegationCalldata = DelegationManager.encode.disableDelegation({
               delegation: delegation as {
@@ -360,7 +358,6 @@ export const useSmartAccountContractWriter = () => {
 
       const cancelReceipt = await bundlerClient.waitForUserOperationReceipt({ hash: cancelUoHash })
       const txHash = cancelReceipt?.receipt?.transactionHash || cancelUoHash
-      console.log('Combined transaction confirmed:', txHash)
       // Call API to cancel subscription in database
       if (user?.email?.address && user?.wallet?.address && txHash) {
         try {
@@ -374,9 +371,9 @@ export const useSmartAccountContractWriter = () => {
           });
 
           if (cancellationResult.success) {
-            console.log('Smart Account subscription cancellation recorded in database:', cancellationResult.data?.message);
+            console.log('Subscription cancellation recorded');
           } else {
-            console.error('Failed to record Smart Account cancellation in database:', cancellationResult.error);
+            console.error('Failed to record cancellation in database:', cancellationResult.error);
           }
         } catch (apiError) {
           console.error('API call failed:', apiError);
