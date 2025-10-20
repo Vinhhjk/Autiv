@@ -197,3 +197,5 @@ dist
 !.env.example
 .wrangler/
 .test
+
+app/payment-site/package-lock.json
