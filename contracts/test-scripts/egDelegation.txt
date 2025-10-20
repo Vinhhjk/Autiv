@@ -1,0 +1,104 @@
+{
+  "type": "scheduled",
+  "owner_address": "0x824EBb87c683EdbEFfa2AB267610f563113112ae",
+  "smart_account": "0x7d97fe7086BD52F11dD49Df8855363bF763aC72e",
+  "fromToken": {
+    "address": "0xf817257fed379853cDe0fa4F97AB987181B1E5Ea",
+    "name": "USD Coin",
+    "symbol": "USDC",
+    "decimals": 6,
+    "image_url": "https://imagedelivery.net/cBNDGgkrsEA-b_ixIp9SkQ/usdc.png/public",
+    "verified": true
+  },
+  "toToken": {
+    "address": "0x0000000000000000000000000000000000000000",
+    "name": "Monad",
+    "symbol": "MON",
+    "decimals": 18,
+    "image_url": "https://imagedelivery.net/cBNDGgkrsEA-b_ixIp9SkQ/I_t8rg_V_400x400.jpg/public",
+    "verified": true
+  },
+  "amount": "100000",
+  "amount_formatted": "0.1",
+  "slippage": 2,
+  "output": "31056228644008568",
+  "output_formatted": "0.031056228644008568",
+  "min_output": "30435104071128396",
+  "min_output_formatted": "0.030435104071128396",
+  "timestampExecute": 1760024984820,
+  "swapLimitPrice": "",
+  "limitOrderPrice": "",
+  "signedSwapDelegation": {
+    "delegate": "0x22f4b7Bca137cF91AE3d08B393167FADdA220eee",
+    "delegator": "0x7d97fe7086BD52F11dD49Df8855363bF763aC72e",
+    "authority": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "caveats": [
+      {
+        "enforcer": "0x7F20f61b1f09b08D970938F6fa563634d65c4EeB",
+        "terms": "0x525b929fcd6a64aff834f4eecc6e860486ced700",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x2c21fD0Cb9DC8445CB3fb0DC5E7Bb0Aca01842B5",
+        "terms": "0xf99cae99",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x04658B29F6b82ed55274221a06Fc97D318E25416",
+        "terms": "0x0000000000000000000000000000000000000000000000000000000000000001",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x7F20f61b1f09b08D970938F6fa563634d65c4EeB",
+        "terms": "0x525b929fcd6a64aff834f4eecc6e860486ced700",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x1046bb45C8d673d4ea75321280DB34899413c069",
+        "terms": "0x00000000000000000000000068e7d99800000000000000000000000000000000",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0xcdF6aB796408598Cea671d79506d7D48E97a5437",
+        "terms": "0x01f817257fed379853cde0fa4f97ab987181b1e5ea7d97fe7086bd52f11dd49df8855363bf763ac72e00000000000000000000000000000000000000000000000000000000000186a0",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0xbD7B277507723490Cd50b12EaaFe87C616be6880",
+        "terms": "0x007d97fe7086bd52f11dd49df8855363bf763ac72e000000000000000000000000000000000000000000000000006c2090dedc954c",
+        "args": "0x"
+      }
+    ],
+    "salt": "0x",
+    "signature": "0x934246bf0a4377e81b3f18b03dec377913263cf37b3798545c34f7e9099c5ffa453c97233a75e952b904f4566dac5c72a1cc2dc2a1299c9ab41f74b8dceefea61c"
+  },
+  "signedApproveDelegation": {
+    "delegate": "0x22f4b7Bca137cF91AE3d08B393167FADdA220eee",
+    "delegator": "0x7d97fe7086BD52F11dD49Df8855363bF763aC72e",
+    "authority": "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "caveats": [
+      {
+        "enforcer": "0x7F20f61b1f09b08D970938F6fa563634d65c4EeB",
+        "terms": "0xf817257fed379853cDe0fa4F97AB987181B1E5Ea",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x2c21fD0Cb9DC8445CB3fb0DC5E7Bb0Aca01842B5",
+        "terms": "0x095ea7b3",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0xc2b0d624c1c4319760C96503BA27C347F3260f55",
+        "terms": "0x0000000000000000000000000000000000000000000000000000000000000000095ea7b3000000000000000000000000525b929fcd6a64aff834f4eecc6e860486ced70000000000000000000000000000000000000000000000000000000000000186a0",
+        "args": "0x"
+      },
+      {
+        "enforcer": "0x7F20f61b1f09b08D970938F6fa563634d65c4EeB",
+        "terms": "0xf817257fed379853cDe0fa4F97AB987181B1E5Ea",
+        "args": "0x"
+      }
+    ],
+    "salt": "0x",
+    "signature": "0x19b73e84102e03042a0abfe1b06f58ee1c67b3afe200ac47a65896a523f73da419e436741cc70ca14666d79897cd460c73a85c083f23028b589637efba0df1341c"
+  }
+}

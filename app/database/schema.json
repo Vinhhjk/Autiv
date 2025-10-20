@@ -1,0 +1,410 @@
+{
+  "tables": [
+    {
+      "name": "developers",
+      "columns": [
+        {
+          "name": "wallet_address",
+          "type": "string",
+          "unique": true,
+          "notNull": true
+        },
+        {
+          "name": "smart_account_address",
+          "type": "string",
+          "unique": true
+        },
+        {
+          "name": "display_name",
+          "type": "string"
+        },
+        {
+          "name": "email",
+          "type": "email"
+        },
+        {
+          "name": "company_name",
+          "type": "string"
+        },
+        {
+          "name": "website_url",
+          "type": "string"
+        },
+        {
+          "name": "logo_url",
+          "type": "string"
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "is_verified",
+          "type": "bool",
+          "defaultValue": false
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        },
+        {
+          "name": "total_subscribers",
+          "type": "int",
+          "defaultValue": 0
+        },
+        {
+          "name": "total_revenue",
+          "type": "float",
+          "defaultValue": 0
+        }
+      ]
+    },
+    {
+      "name": "subscription_plans",
+      "columns": [
+        {
+          "name": "developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "project_id",
+          "type": "link",
+          "link": {
+            "table": "projects"
+          },
+          "notNull": true
+        },
+        {
+          "name": "contract_plan_id",
+          "type": "int",
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "price",
+          "type": "float",
+          "notNull": true
+        },
+        {
+          "name": "token_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "token_symbol",
+          "type": "string",
+          "defaultValue": "USDC"
+        },
+        {
+          "name": "period_seconds",
+          "type": "int",
+          "notNull": true
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        },
+        {
+          "name": "current_subscribers",
+          "type": "int",
+          "defaultValue": 0
+        }
+      ]
+    },
+    {
+      "name": "user_subscriptions",
+      "columns": [
+        {
+          "name": "user_wallet_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "user_smart_account",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "user_email",
+          "type": "email"
+        },
+        {
+          "name": "plan_id",
+          "type": "link",
+          "link": {
+            "table": "subscription_plans"
+          },
+          "notNull": true
+        },
+        {
+          "name": "developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "start_date",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "next_payment_date",
+          "type": "integer"
+        },
+        {
+          "name": "last_payment_date",
+          "type": "integer"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "integer"
+        },
+        {
+          "name": "subscription_manager_address",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "payments",
+      "columns": [
+        {
+          "name": "subscription_id",
+          "type": "link",
+          "link": {
+            "table": "user_subscriptions"
+          },
+          "notNull": true
+        },
+        {
+          "name": "user_wallet_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "amount",
+          "type": "float",
+          "notNull": true
+        },
+        {
+          "name": "token_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "token_symbol",
+          "type": "string",
+          "defaultValue": "USDC"
+        },
+        {
+          "name": "payment_date",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "tx_hash",
+          "type": "string",
+          "unique": true,
+          "notNull": true
+        }
+      ]
+    },
+    {
+      "name": "projects",
+      "columns": [
+        {
+          "name": "developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "supported_token_id",
+          "type": "link",
+          "link": {
+            "table": "supported_tokens"
+          },
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "subscription_manager_address",
+          "type": "string",
+          "unique": true
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        }
+      ]
+    },
+    {
+      "name": "api_keys",
+      "columns": [
+        {
+          "name": "developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "key_value",
+          "type": "string",
+          "unique": true,
+          "notNull": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        }
+      ]
+    },
+    {
+      "name": "supported_tokens",
+      "columns": [
+        {
+          "name": "name",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "symbol",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "token_address",
+          "type": "string",
+          "notNull": true,
+          "unique": true
+        }
+      ]
+    },
+    {
+      "name": "project_delegations",
+      "columns": [
+        {
+          "name": "project_id",
+          "type": "link",
+          "link": {
+            "table": "projects"
+          },
+          "notNull": true
+        },
+        {
+          "name": "delegated_to_developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "delegated_by_developer_id",
+          "type": "link",
+          "link": {
+            "table": "developers"
+          },
+          "notNull": true
+        },
+        {
+          "name": "permissions",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        }
+      ]
+    },
+    {
+      "name": "user_delegations",
+      "columns": [
+        {
+          "name": "user_wallet_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "user_smart_account",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "subscription_manager_address",
+          "type": "string",
+          "notNull": true
+        },
+        {
+          "name": "delegation_data",
+          "type": "text",
+          "notNull": true
+        },
+        {
+          "name": "is_active",
+          "type": "bool",
+          "defaultValue": true
+        },
+        {
+          "name": "created_at",
+          "type": "integer",
+          "notNull": true
+        },
+        {
+          "name": "cancelled_at",
+          "type": "integer"
+        }
+      ]
+    }
+  ]
+}

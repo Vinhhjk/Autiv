@@ -1,0 +1,9 @@
+{
+  "SUBSCRIPTION_MANAGER": "0x2cDdE59123226e7321180153bBDB21CCF848c301",
+  "USDC_ADDRESS": "0x7B35FBfa0635dbF7c4ACFA733585b90e3531888A",
+  "DEPLOYMENT_TIMESTAMP": 1760781105,
+  "NETWORK": "monad-testnet",
+  "CHAIN_ID": 10143,
+  "RPC_URL": "https://testnet-rpc.monad.xyz",
+  "EXPLORER_URL": "https://testnet.monadexplorer.xyx"
+}

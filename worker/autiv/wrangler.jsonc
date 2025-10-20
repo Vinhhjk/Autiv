@@ -1,0 +1,34 @@
+{
+	"name": "autiv-worker",
+	"main": "src/index.js",
+	"compatibility_date": "2025-10-02",
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "NONCE_MANAGER",
+				"class_name": "NonceManager"
+			},
+			{
+				"name": "PAYMENT_SESSION_MANAGER",
+				"class_name": "PaymentSessionManager"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"NonceManager"
+			]
+		},
+		{
+			"tag": "v2",
+			"new_sqlite_classes": [
+				"PaymentSessionManager"
+			]
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}

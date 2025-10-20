@@ -1,0 +1,23 @@
+{
+  "name": "autiv-database",
+  "version": "1.0.0",
+  "description": "Autiv database schema and utilities for Xata PostgreSQL",
+  "type": "module",
+  "scripts": {
+    "migrate": "node migrate.js",
+    "migrate:seed": "node migrate.js --seed",
+    "test": "node test_db.js"
+  },
+  "keywords": [
+    "xata",
+    "postgresql",
+    "database",
+    "subscription",
+    "crypto",
+    "web3"
+  ],
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "pg": "^8.16.3"
+  }
+}

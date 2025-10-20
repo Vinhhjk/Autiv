@@ -1,0 +1,374 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+
+:root {
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  /* Monad Brand Colors */
+  --monad-purple: #836ef9;
+  --monad-blue: #200052;
+  --monad-berry: #a0055d;
+  --monad-off-white: #fbfaf9;
+  --monad-black: #0e100f;
+
+  /* Retro Colors (keeping some for variety) */
+  --retro-pink: #ff6b6b;
+  --retro-cyan: #4ecdc4;
+  --retro-blue: #45b7d1;
+  --retro-green: #96ceb4;
+  --retro-yellow: #feca57;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f8f9fa;
+  min-height: 100vh;
+}
+
+/* Subtle Professional Animations */
+@keyframes gentle-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes fade-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-gentle-float {
+  animation: gentle-float 4s ease-in-out infinite;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.6s ease-out;
+}
+
+/* Retro Web Patterns */
+.retro-dots {
+  background-image: radial-gradient(circle, #000 1px, transparent 1px);
+  background-size: 20px 20px;
+  opacity: 0.1;
+}
+
+.retro-stripes {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 10px,
+    rgba(0, 0, 0, 0.05) 10px,
+    rgba(0, 0, 0, 0.05) 20px
+  );
+}
+
+.retro-border {
+  border: 3px solid #000;
+  box-shadow: 3px 3px 0px #ff6b6b, 6px 6px 0px #4ecdc4, 9px 9px 0px #45b7d1;
+}
+
+.retro-button {
+  background: linear-gradient(145deg, #ffffff, #f0f0f0);
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0px #000000;
+  transform: translate(0, 0);
+  transition: all 0.2s ease;
+}
+
+.retro-button:hover {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.retro-button:active {
+  transform: translate(3px, 3px);
+  box-shadow: none;
+}
+
+.retro-card {
+  background: #ffffff;
+  border: 3px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  transition: all 0.3s ease;
+}
+
+.retro-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.y2k-gradient {
+  background: linear-gradient(
+    135deg,
+    #ff6b6b 0%,
+    #4ecdc4 25%,
+    #45b7d1 50%,
+    #96ceb4 75%,
+    #feca57 100%
+  );
+}
+
+.gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--monad-purple) 0%,
+    var(--monad-berry) 50%,
+    var(--monad-blue) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Removed text shadows for cleaner look */
+
+.geometric-bg {
+  background: linear-gradient(
+      45deg,
+      transparent 40%,
+      rgba(255, 107, 107, 0.1) 40%,
+      rgba(255, 107, 107, 0.1) 60%,
+      transparent 60%
+    ),
+    linear-gradient(
+      -45deg,
+      transparent 40%,
+      rgba(78, 205, 196, 0.1) 40%,
+      rgba(78, 205, 196, 0.1) 60%,
+      transparent 60%
+    );
+  background-size: 60px 60px;
+}
+/* Utili
+ty classes for retro colors */
+.bg-retro-pink {
+  background-color: var(--retro-pink) !important;
+}
+.bg-retro-cyan {
+  background-color: var(--retro-cyan) !important;
+}
+.bg-retro-blue {
+  background-color: var(--retro-blue) !important;
+}
+.bg-retro-green {
+  background-color: var(--retro-green) !important;
+}
+.bg-retro-yellow {
+  background-color: var(--retro-yellow) !important;
+}
+
+.text-retro-pink {
+  color: var(--retro-pink) !important;
+}
+.text-retro-cyan {
+  color: var(--retro-cyan) !important;
+}
+.text-retro-blue {
+  color: var(--retro-blue) !important;
+}
+.text-retro-green {
+  color: var(--retro-green) !important;
+}
+.text-retro-yellow {
+  color: var(--retro-yellow) !important;
+}
+
+.border-black-thick {
+  border: 4px solid #000000 !important;
+}
+.border-black-medium {
+  border: 3px solid #000000 !important;
+}
+.border-black-thin {
+  border: 2px solid #000000 !important;
+} /* Monad B
+rand Utility Classes */
+.bg-monad-purple {
+  background-color: var(--monad-purple) !important;
+}
+.bg-monad-blue {
+  background-color: var(--monad-blue) !important;
+}
+.bg-monad-berry {
+  background-color: var(--monad-berry) !important;
+}
+.bg-monad-off-white {
+  background-color: var(--monad-off-white) !important;
+}
+.bg-monad-black {
+  background-color: var(--monad-black) !important;
+}
+
+.text-monad-purple {
+  color: var(--monad-purple) !important;
+}
+.text-monad-blue {
+  color: var(--monad-blue) !important;
+}
+.text-monad-berry {
+  color: var(--monad-berry) !important;
+}
+.text-monad-off-white {
+  color: var(--monad-off-white) !important;
+}
+
+/* Monad-themed gradients */
+.monad-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--monad-purple) 0%,
+    var(--monad-berry) 50%,
+    var(--monad-blue) 100%
+  );
+}
+
+.monad-gradient-text {
+  background: linear-gradient(
+    135deg,
+    var(--monad-purple) 0%,
+    var(--monad-berry) 50%,
+    var(--monad-blue) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+* Custom Minimal Scrollbar */
+/* Webkit browsers (Chrome, Safari, Edge) */
+::-webkit-scrollbar {
+  width: 6px; /* Slightly thinner */
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15); /* Very faded black */
+  border-radius: 0px; /* Keep it square for retro feel */
+  transition: background-color 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.4); /* Slightly more visible on hover */
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+/* For better cross-browser support */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+/* Mobile - almost invisible */
+@media (max-width: 768px) {
+  ::-webkit-scrollbar {
+    width: 3px; /* Even thinner on mobile */
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.1); /* Very subtle on mobile */
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 0, 0, 0.25);
+  }
+} /* A
+uto-fade behavior - becomes even more subtle when not actively used */
+body:not(:hover) ::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.08); /* Extra faded when not interacting */
+  transition: background-color 0.5s ease;
+}
+/* Mobile Menu Styles */
+.mobile-menu-backdrop {
+  backdrop-filter: blur(4px);
+}
+
+/* Prevent body scroll when mobile menu is open */
+.mobile-menu-open {
+  overflow: hidden;
+}
+
+/* Ensure mobile menu appears above everything */
+.mobile-menu-panel {
+  box-shadow: -4px 0 0 #000000;
+}
+
+/* Mobile menu animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOutRight {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+/* C
+ustom Retro Scrollbar for Subscription Container */
+.subscription-scroll::-webkit-scrollbar {
+  width: 12px;
+}
+
+.subscription-scroll::-webkit-scrollbar-track {
+  background: #f8f9fa;
+  border: 2px solid #000000;
+  border-radius: 0;
+}
+
+.subscription-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(45deg, #feca57, #ff6b6b);
+  border: 2px solid #000000;
+  border-radius: 0;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.subscription-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.subscription-scroll::-webkit-scrollbar-corner {
+  background: #f8f9fa;
+  border: 2px solid #000000;
+}
+
+/* Firefox scrollbar */
+.subscription-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #feca57 #f8f9fa;
+}
