@@ -7,7 +7,6 @@ import {
   Settings,
   DollarSign,
   Clock,
-  Users,
   CheckCircle,
   AlertCircle
 } from 'lucide-react'
@@ -443,13 +442,6 @@ const ProjectDetail = () => {
                       <span className="font-bold">{formatPeriod(plan.period_seconds)}</span>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <span className="flex items-center space-x-2">
-                        <Users size={16} />
-                        <span className="font-medium">Subscribers</span>
-                      </span>
-                      <span className="font-bold">{plan.current_subscribers || 0}</span>
-                    </div>
                   </div>
                 </motion.div>
               ))}

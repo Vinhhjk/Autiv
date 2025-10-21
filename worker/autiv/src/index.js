@@ -2078,8 +2078,7 @@ async function createSubscriptionPlan(xataApiKey, planData, env) {
         token_address: planTokenAddress,
         token_symbol: planTokenSymbol,
         period_seconds: period_seconds,
-        is_active: true,
-        current_subscribers: 0
+        is_active: true
       })
     }, xataApiKey, env);
 
@@ -2176,7 +2175,7 @@ async function getProjectDetails(xataApiKey, project_id, env) {
     const plansResponse = await xataRequest("tables/subscription_plans/query", {
       method: "POST",
       body: JSON.stringify({
-        columns: ["id", "contract_plan_id", "name", "price", "token_symbol", "period_seconds", "current_subscribers"],
+        columns: ["id", "contract_plan_id", "name", "price", "token_symbol", "period_seconds"],
         filter: { project_id: project_id, is_active: true },
         sort: [{ "contract_plan_id": "asc" }]
       })
@@ -2247,9 +2246,7 @@ async function createDeveloper(xataApiKey, developerData, env) {
         logo_url: logo_url,
         description: description,
         is_verified: false,
-        is_active: true,
-        total_subscribers: 0,
-        total_revenue: 0
+        is_active: true
       })
     }, xataApiKey, env);
 

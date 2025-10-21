@@ -2,6 +2,7 @@
 	"name": "autiv-worker",
 	"main": "src/index.js",
 	"compatibility_date": "2025-10-02",
+	"workers_dev": false,
 	"durable_objects": {
 		"bindings": [
 			{
@@ -30,5 +31,9 @@
 	],
 	"observability": {
 		"enabled": true
+	},
+	"route": {
+		"pattern": "api.autiv.xyz",
+		"custom_domain": true
 	}
 }

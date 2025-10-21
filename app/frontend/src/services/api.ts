@@ -88,7 +88,6 @@ interface SubscriptionPlan {
   token_symbol?: string;
   period_seconds: number;
   is_active?: boolean;
-  current_subscribers?: number;
 }
 
 interface UserSubscriptionData {

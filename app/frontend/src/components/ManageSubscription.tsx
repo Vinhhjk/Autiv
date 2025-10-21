@@ -70,7 +70,7 @@ const ManageSubscription = () => {
         try {
           const parsed = JSON.parse(storedSmartAccount)
           setSmartAccount(parsed)
-          console.log('Loaded smart account from localStorage:', parsed.address)
+          console.log('Loaded smart account', parsed.address)
         } catch (error) {
           console.error('Failed to parse stored smart account:', error)
         }

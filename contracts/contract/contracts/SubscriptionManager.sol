@@ -38,7 +38,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
     
     // Events
     event PlanCreated(uint256 indexed planId, string name, uint256 price, uint256 period);
-    event PlanUpdated(uint256 indexed planId, bool active);
+    event PlanUpdated(uint256 indexed planId, uint256 oldPrice, uint256 newPrice);
     event SubscriptionCreated(address indexed user, uint256 indexed planId);
     event SubscriptionCancelled(address indexed user);
     event PaymentProcessed(address indexed user, uint256 amount, uint256 timestamp);
@@ -80,12 +80,14 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Update plan status
+     * @dev Update plan price
      */
-    function updatePlan(uint256 _planId, bool _active) external onlyOwner {
+    function updatePlan(uint256 _planId, uint256 _newPrice) external onlyOwner {
         require(_planId < nextPlanId, "Plan does not exist");
-        plans[_planId].active = _active;
-        emit PlanUpdated(_planId, _active);
+        SubscriptionPlan storage plan = plans[_planId];
+        uint256 oldPrice = plan.price;
+        plan.price = _newPrice;
+        emit PlanUpdated(_planId, oldPrice, _newPrice);
     }
     
     /**
@@ -98,7 +100,7 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         
         SubscriptionPlan memory plan = plans[_planId];
         
-        // Transfer USDC from user to contract for initial payment
+        // Transfer ERC20 token from user to contract for initial payment
         IERC20 token = IERC20(plan.tokenAddress);
         require(
             token.transferFrom(msg.sender, address(this), plan.price),
