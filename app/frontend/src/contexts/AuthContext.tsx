@@ -5,6 +5,7 @@
 
 import React, { createContext, useEffect, useCallback, useState, useRef } from "react";
 import { usePrivy, useIdentityToken, type User } from "@privy-io/react-auth";
+import { useSmartAccount } from "../hooks/useSmartAccount";
 import { apiService, type UserInfo, type Subscription, type Developer } from "../services/api";
 
 // Cache keys for localStorage
@@ -277,6 +278,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, authenticated, login, logout: privyLogout, getAccessToken } = usePrivy();
   const { identityToken } = useIdentityToken();
+  const { smartAccountResult } = useSmartAccount();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [developerInfo, setDeveloperInfo] = useState<Developer | null>(null);
@@ -438,6 +440,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn("Could not parse smart account from localStorage");
         }
 
+        if (!smartAccountAddress && smartAccountResult?.smartAccount?.address) {
+          smartAccountAddress = smartAccountResult.smartAccount.address;
+        }
+
         if (!smartAccountAddress) {
           console.log('Waiting for smart account before creating user record');
           return;
@@ -512,7 +518,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initializeUser();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authenticated, user?.email?.address, user?.wallet?.address]);
+  }, [authenticated, user?.email?.address, user?.wallet?.address, smartAccountResult?.smartAccount?.address]);
 
   const value: AuthContextType = {
     // Privy auth state

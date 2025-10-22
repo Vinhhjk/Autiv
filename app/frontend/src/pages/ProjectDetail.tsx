@@ -11,6 +11,9 @@ import {
   AlertCircle
 } from 'lucide-react'
 import { apiService, type Project, type SubscriptionPlan } from '../services/api'
+import { useSmartAccount } from '../hooks/useSmartAccount'
+import { useSmartAccountContractWriter } from '../hooks/useSmartAccountContractWriter'
+import { parseUnits } from 'viem'
 import { useAuth } from '../hooks/useAuth'
 
 interface ProjectDetailsData {
@@ -22,6 +25,8 @@ const ProjectDetail = () => {
   const navigate = useNavigate()
   const { projectId } = useParams<{ projectId: string }>()
   const { userInfo } = useAuth()
+  const { smartAccountResult } = useSmartAccount()
+  const { createPlansBatchWithSmartAccount } = useSmartAccountContractWriter()
   
   const [projectData, setProjectData] = useState<ProjectDetailsData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -31,7 +36,6 @@ const ProjectDetail = () => {
   const [createResult, setCreateResult] = useState<{ success: boolean; message: string; type: 'plan' } | null>(null)
 
   const [planFormData, setPlanFormData] = useState({
-    contract_plan_id: 0,
     name: '',
     price: 0,
     token_address: '',
@@ -103,12 +107,84 @@ const ProjectDetail = () => {
     e.preventDefault()
     if (!userInfo?.email || !projectId) return
 
+    const subscriptionManagerAddress = projectData?.project?.subscription_manager_address
+    const tokenAddress = projectData?.project?.supported_token?.token_address
+    const smartAccount = smartAccountResult?.smartAccount
+
+    if (!subscriptionManagerAddress || !tokenAddress || !smartAccount) {
+      setCreateResult({
+        success: false,
+        message: 'Missing smart account or project contract configuration',
+        type: 'plan'
+      })
+      return
+    }
+
+    const existingPlanCount = projectData?.subscription_plans?.length || 0
+    if (existingPlanCount >= 5) {
+      setCreateResult({
+        success: false,
+        message: 'Maximum of 5 plans per project reached',
+        type: 'plan'
+      })
+      return
+    }
+
+    const plansToCreate = [
+      {
+        contract_plan_id: existingPlanCount + 1,
+        name: planFormData.name.trim(),
+        price: planFormData.price,
+        period_seconds: planFormData.period_seconds,
+      },
+    ]
+
+    if (!plansToCreate.every((plan) => plan.name && plan.price > 0 && plan.period_seconds > 0)) {
+      setCreateResult({
+        success: false,
+        message: 'Plan name, price, and billing period must be provided',
+        type: 'plan'
+      })
+      return
+    }
+
+    const planNames = plansToCreate.map((plan) => plan.name)
+    const planPrices = plansToCreate.map((plan) => parseUnits(plan.price.toString(), 18))
+    const planPeriods = plansToCreate.map((plan) => BigInt(plan.period_seconds))
+    const planTokens = plansToCreate.map(() => tokenAddress as `0x${string}`)
+
     setIsCreatingPlan(true)
     try {
+      const { txHash, plans } = await createPlansBatchWithSmartAccount(
+        smartAccount,
+        subscriptionManagerAddress as `0x${string}`,
+        planNames,
+        planPrices,
+        planPeriods,
+        planTokens
+      )
+
+      const plansPayload = plans.length
+        ? plans.map((plan, index) => ({
+            contract_plan_id: plansToCreate[index]?.contract_plan_id ?? Number(plan.planId),
+            name: plansToCreate[index]?.name || `Plan ${Number(plan.planId)}`,
+            price: Number(plan.price),
+            token_address: plan.tokenAddress,
+            period_seconds: Number(plan.periodSeconds),
+          }))
+        : plansToCreate.map((plan) => ({
+            contract_plan_id: plan.contract_plan_id,
+            name: plan.name,
+            price: plan.price,
+            token_address: tokenAddress,
+            period_seconds: plan.period_seconds,
+          }))
+
       const result = await apiService.createSubscriptionPlan({
         developer_email: userInfo.email,
         project_id: projectId,
-        ...planFormData
+        tx_hash: txHash,
+        plans: plansPayload,
       })
 
       if (result.success) {
@@ -118,7 +194,6 @@ const ProjectDetail = () => {
           type: 'plan'
         })
         setPlanFormData({
-          contract_plan_id: 0,
           name: '',
           price: 0,
           token_address: projectData?.project?.supported_token?.token_address || '',
@@ -246,17 +321,13 @@ const ProjectDetail = () => {
                   <label className="block text-lg font-bold text-black mb-2">Plan ID</label>
                   <input
                     type="number"
-                    value={planFormData.contract_plan_id}
-                    onChange={(e) => setPlanFormData({ ...planFormData, contract_plan_id: parseInt(e.target.value) })}
-                    required
-                    min="0"
-                    className="w-full px-4 py-3 text-lg font-medium"
+                    value={(projectData?.subscription_plans?.length || 0) + 1}
+                    readOnly
+                    className="w-full px-4 py-3 text-lg font-medium bg-gray-100"
                     style={{
-                      backgroundColor: '#ffffff',
                       border: '2px solid #000000',
                       boxShadow: '2px 2px 0px #000000'
                     }}
-                    placeholder="0"
                   />
                 </div>
 
@@ -280,7 +351,9 @@ const ProjectDetail = () => {
 
               <div className="grid md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-lg font-bold text-black mb-2">Price (USDC)</label>
+                  <label className="block text-lg font-bold text-black mb-2">
+                    Price ({projectData?.project?.supported_token?.symbol || 'Token'})
+                  </label>
                   <input
                     type="number"
                     step="0.01"
@@ -294,16 +367,16 @@ const ProjectDetail = () => {
                       border: '2px solid #000000',
                       boxShadow: '2px 2px 0px #000000'
                     }}
-                    placeholder="9.99"
+                    placeholder={`9.99 ${projectData?.project?.supported_token?.symbol || ''}`.trim()}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-lg font-bold text-black mb-2">Period (days)</label>
+                  <label className="block text-lg font-bold text-black mb-2">Period (seconds)</label>
                   <input
                     type="number"
-                    value={planFormData.period_seconds / 86400}
-                    onChange={(e) => setPlanFormData({ ...planFormData, period_seconds: parseInt(e.target.value) * 86400 })}
+                    value={planFormData.period_seconds}
+                    onChange={(e) => setPlanFormData({ ...planFormData, period_seconds: parseInt(e.target.value, 10) || 0 })}
                     required
                     min="1"
                     className="w-full px-4 py-3 text-lg font-medium"
@@ -312,8 +385,9 @@ const ProjectDetail = () => {
                       border: '2px solid #000000',
                       boxShadow: '2px 2px 0px #000000'
                     }}
-                    placeholder="30"
+                    placeholder="2592000"
                   />
+                  <p className="text-sm text-gray-600 mt-2">Enter billing interval in seconds (e.g. 2592000 for 30 days).</p>
                 </div>
               </div>
 

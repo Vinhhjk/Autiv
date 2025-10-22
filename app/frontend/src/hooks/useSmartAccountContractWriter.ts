@@ -13,6 +13,7 @@ import SubscriptionManagerABI from '../contracts/SubscriptionManager.json'
 import SubscriptionManagerFactoryABI from '../contracts/SubscriptionManagerFactory.json'
 import MockUSDCABI from '../contracts/MockUSDC.json'
 import { apiService } from '../services/api'
+import { getEventSignature, decodeEventData } from '../utils/contractEvents'
 
 const MONAD_TESTNET_CHAIN_ID = 10143
 const CONFIG_CACHE_KEY_PREFIX = 'autiv.contractConfig'
@@ -244,6 +245,110 @@ export const useSmartAccountContractWriter = () => {
       console.error('Error preloading contract configuration:', error)
     })
   }, [authenticated, loadContractConfig])
+
+  const createPlansBatchWithSmartAccount = async (
+    smartAccount: FlexibleSmartAccount,
+    subscriptionManagerAddress: `0x${string}`,
+    planNames: string[],
+    planPrices: bigint[],
+    planPeriods: bigint[],
+    tokenAddresses: `0x${string}`[]
+  ) => {
+    if (!smartAccount) {
+      throw new Error('Smart Account not available')
+    }
+
+    if (!bundlerClient || !paymasterClient) {
+      throw new Error('Bundler or Paymaster client not available')
+    }
+
+    if (
+      planNames.length === 0 ||
+      planNames.length !== planPrices.length ||
+      planNames.length !== planPeriods.length ||
+      planNames.length !== tokenAddresses.length
+    ) {
+      throw new Error('Plan arrays must be non-empty and of matching length')
+    }
+
+    if (planNames.length > 5) {
+      throw new Error('A maximum of 5 plans can be created at once')
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const calldata = encodeFunctionData({
+        abi: SubscriptionManagerABI.abi,
+        functionName: 'createPlansBatch',
+        args: [planNames, planPrices, planPeriods, tokenAddresses]
+      })
+
+      const userOperationHash: `0x${string}` = await bundlerClient.sendUserOperation({
+        account: smartAccount as unknown as ViemSmartAccount,
+        calls: [
+          {
+            to: subscriptionManagerAddress,
+            data: calldata
+          }
+        ],
+        paymaster: paymasterClient,
+        paymasterContext: {
+          policyId: import.meta.env.VITE_ALCHEMY_GAS_POLICY_ID,
+        },
+      })
+
+      const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOperationHash })
+      const txHash = receipt?.receipt?.transactionHash || userOperationHash
+
+      const planCreatedTopic = getEventSignature('PlanCreated(uint256,uint256,address,uint256)')
+      const receiptLogs = (receipt?.receipt?.logs ?? []) as Array<{
+        address?: string
+        topics?: string[]
+        data?: string
+      }>
+
+      const createdPlans = receiptLogs
+        .filter((log) => {
+          const normalizedAddress = log.address ? log.address.toLowerCase() : null
+          return normalizedAddress === subscriptionManagerAddress.toLowerCase()
+        })
+        .filter((log) => (log.topics?.[0] || '').toLowerCase() === planCreatedTopic.toLowerCase())
+        .map((log) => {
+          const topics = log.topics ?? []
+          const data = log.data ?? '0x'
+          const decoded = decodeEventData('PlanCreated', topics, data) as {
+            planId?: string
+            price?: string
+            tokenAddress?: string
+            periodSeconds?: string
+          }
+
+          const planId = decoded.planId ? BigInt(decoded.planId) : 0n
+          const price = decoded.price ? BigInt(decoded.price) : 0n
+          const periodSeconds = decoded.periodSeconds ? BigInt(decoded.periodSeconds) : 0n
+          const tokenAddress = (decoded.tokenAddress || subscriptionManagerAddress) as `0x${string}`
+
+          return {
+            planId,
+            price,
+            tokenAddress,
+            periodSeconds,
+          }
+        })
+
+      return {
+        txHash,
+        plans: createdPlans,
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Batch plan creation failed')
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const deploySubscriptionManager = async (
     smartAccount: FlexibleSmartAccount,
@@ -879,6 +984,7 @@ export const useSmartAccountContractWriter = () => {
   return {
     deploySubscriptionManager,
     subscribeWithSmartAccount,
+    createPlansBatchWithSmartAccount,
     claimMockUSDCWithSmartAccount,
     cancelSubscriptionWithSmartAccount,
     transferUSDCToSmartAccount,

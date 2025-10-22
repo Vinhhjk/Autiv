@@ -88,80 +88,73 @@ const ManageSubscription = () => {
     }
   ]) as const, [])
 
+  const fetchTokenBalances = useCallback(async () => {
+    if (!publicClient || !smartAccountAddress || supportedTokens.length === 0) {
+      setTokenBalances({})
+      return
+    }
+
+    try {
+      setIsFetchingBalance(true)
+
+      const contracts = supportedTokens.flatMap((token) => ([
+        {
+          address: token.token_address as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'balanceOf' as const,
+          args: [smartAccountAddress as `0x${string}`]
+        },
+        {
+          address: token.token_address as `0x${string}`,
+          abi: erc20Abi,
+          functionName: 'decimals' as const
+        }
+      ]))
+
+      const results = await publicClient.multicall({
+        contracts,
+        allowFailure: true
+      })
+
+      const nextBalances: Record<string, { balanceFormatted: string | null; decimals: number | null; rawBalance: bigint | null }> = {}
+
+      for (let i = 0; i < supportedTokens.length; i += 1) {
+        const token = supportedTokens[i]
+        if (!token) continue
+        const key = token.token_address.toLowerCase()
+        const balanceResult = results[i * 2]
+        const decimalsResult = results[i * 2 + 1]
+
+        const decimalsValue = decimalsResult?.status === 'success' ? Number(decimalsResult.result) : undefined
+        const resolvedDecimals = Number.isFinite(decimalsValue) ? (decimalsValue as number) : (typeof token.decimals === 'number' ? token.decimals : 18)
+        const rawBalance = balanceResult?.status === 'success' ? (balanceResult.result as bigint) : null
+        const balanceFormatted = rawBalance != null ? Number(formatUnits(rawBalance, resolvedDecimals)).toFixed(3) : null
+
+        nextBalances[key] = {
+          balanceFormatted,
+          decimals: resolvedDecimals,
+          rawBalance
+        }
+      }
+
+      setTokenBalances(nextBalances)
+    } catch (err) {
+      console.error('Failed to fetch token balances via RPC', err)
+      setTokenBalances({})
+    } finally {
+      setIsFetchingBalance(false)
+    }
+  }, [publicClient, smartAccountAddress, supportedTokens, erc20Abi])
+
   useEffect(() => {
-    if (!isWithdrawOpen || !publicClient || !smartAccountAddress || supportedTokens.length === 0) {
+    if (!isWithdrawOpen || supportedTokens.length === 0) {
       setTokenBalances({})
       setWithdrawBalance(null)
       return
     }
 
-    let isCancelled = false
-
-    const fetchBalances = async () => {
-      try {
-        setIsFetchingBalance(true)
-
-        const contracts = supportedTokens.flatMap((token) => ([
-          {
-            address: token.token_address as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'balanceOf' as const,
-            args: [smartAccountAddress as `0x${string}`]
-          },
-          {
-            address: token.token_address as `0x${string}`,
-            abi: erc20Abi,
-            functionName: 'decimals' as const
-          }
-        ]))
-
-        const results = await publicClient.multicall({
-          contracts,
-          allowFailure: true
-        })
-
-        const nextBalances: Record<string, { balanceFormatted: string | null; decimals: number | null; rawBalance: bigint | null }> = {}
-
-        for (let i = 0; i < supportedTokens.length; i += 1) {
-          const token = supportedTokens[i]
-          if (!token) continue
-          const key = token.token_address.toLowerCase()
-          const balanceResult = results[i * 2]
-          const decimalsResult = results[i * 2 + 1]
-
-          const decimalsValue = decimalsResult?.status === 'success' ? Number(decimalsResult.result) : undefined
-          const resolvedDecimals = Number.isFinite(decimalsValue) ? (decimalsValue as number) : (typeof token.decimals === 'number' ? token.decimals : 18)
-          const rawBalance = balanceResult?.status === 'success' ? (balanceResult.result as bigint) : null
-          const balanceFormatted = rawBalance != null ? Number(formatUnits(rawBalance, resolvedDecimals)).toFixed(3) : null
-
-          nextBalances[key] = {
-            balanceFormatted,
-            decimals: resolvedDecimals,
-            rawBalance
-          }
-        }
-
-        if (!isCancelled) {
-          setTokenBalances(nextBalances)
-        }
-      } catch (err) {
-        if (!isCancelled) {
-          console.error('Failed to fetch token balances via RPC', err)
-          setTokenBalances({})
-        }
-      } finally {
-        if (!isCancelled) {
-          setIsFetchingBalance(false)
-        }
-      }
-    }
-
-    void fetchBalances()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [isWithdrawOpen, publicClient, smartAccountAddress, supportedTokens, erc20Abi])
+    void fetchTokenBalances()
+  }, [isWithdrawOpen, supportedTokens.length, fetchTokenBalances])
 
   useEffect(() => {
     if (!withdrawToken) {
@@ -276,25 +269,36 @@ const ManageSubscription = () => {
       const response = await apiService.getSupportedTokens()
       if (response.success && response.data?.tokens) {
         setSupportedTokens(response.data.tokens)
+        if (response.success && response.data?.tokens && response.data.tokens.length > 0) {
+          await fetchTokenBalances()
+        }
       }
     } catch (tokenError) {
       console.error('Failed to load supported tokens', tokenError)
     } finally {
       setIsLoadingTokens(false)
     }
-  }, [isLoadingTokens])
+  }, [isLoadingTokens, fetchTokenBalances])
 
   useEffect(() => {
-    if (isWithdrawOpen && supportedTokens.length === 0) {
-      loadSupportedTokens()
+    if (isWithdrawOpen) {
+      if (supportedTokens.length === 0) {
+        loadSupportedTokens()
+      } else {
+        void fetchTokenBalances()
+      }
     }
-  }, [isWithdrawOpen, supportedTokens.length, loadSupportedTokens])
+  }, [isWithdrawOpen, supportedTokens.length, loadSupportedTokens, fetchTokenBalances])
 
   useEffect(() => {
-    if (isBalanceOpen && supportedTokens.length === 0) {
-      loadSupportedTokens()
+    if (isBalanceOpen) {
+      if (supportedTokens.length === 0) {
+        loadSupportedTokens()
+      } else {
+        void fetchTokenBalances()
+      }
     }
-  }, [isBalanceOpen, supportedTokens.length, loadSupportedTokens])
+  }, [isBalanceOpen, supportedTokens.length, loadSupportedTokens, fetchTokenBalances])
 
   const closeWithdrawModal = () => {
     setIsWithdrawOpen(false)
@@ -677,7 +681,7 @@ const ManageSubscription = () => {
                   </p>
                   <button
                     onClick={() => {
-                      void loadSupportedTokens()
+                      void fetchTokenBalances()
                     }}
                     className="w-10 h-10 flex items-center justify-center bg-white"
                     style={{ border: '3px solid #000000', boxShadow: '3px 3px 0px #000000' }}

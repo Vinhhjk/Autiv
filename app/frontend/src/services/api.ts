@@ -472,12 +472,15 @@ class ApiService {
   async createSubscriptionPlan(planData: {
     developer_email: string;
     project_id: string;
-    contract_plan_id: number;
-    name: string;
-    price: number;
-    token_address: string;
-    period_seconds: number;
-  }): Promise<ApiResponse<{ plan: SubscriptionPlan }>> {
+    tx_hash?: string;
+    plans: Array<{
+      contract_plan_id: number;
+      name: string;
+      price: number;
+      token_address: string;
+      period_seconds: number;
+    }>;
+  }): Promise<ApiResponse<{ plans: SubscriptionPlan[] }>> {
     return this.makeRequest("/api/create-subscription-plan", {
       method: "POST",
       body: JSON.stringify(planData),

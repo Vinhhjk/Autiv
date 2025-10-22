@@ -25,8 +25,8 @@ function App() {
   }, [])
 
   return (
-    <AuthProvider>
-      <SmartAccountProvider>
+    <SmartAccountProvider>
+      <AuthProvider>
         <SubscriptionProvider>
           <div className="min-h-screen" style={{ backgroundColor: '#f0f0f0' }}>
             {showHeader && <Header />}
@@ -39,8 +39,8 @@ function App() {
             />
           </div>
         </SubscriptionProvider>
-      </SmartAccountProvider>
-    </AuthProvider>
+      </AuthProvider>
+    </SmartAccountProvider>
   )
 }
 

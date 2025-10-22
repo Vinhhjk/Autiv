@@ -36,7 +36,7 @@ const generatePlanId = () =>
 
 const DeveloperDashboard = () => {
   const navigate = useNavigate()
-  const { userInfo, isDeveloper, refreshDeveloperData } = useAuth()
+  const { userInfo, user, authenticated, isDeveloper, refreshDeveloperData } = useAuth()
   const { smartAccountResult, createSmartAccount } = useSmartAccount()
   const { deploySubscriptionManager } = useSmartAccountContractWriter()
   const [projects, setProjects] = useState<Project[]>([])
@@ -247,7 +247,9 @@ const DeveloperDashboard = () => {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!userInfo?.email) {
+    const userEmail = userInfo?.email || user?.email?.address || null
+
+    if (!authenticated || !userEmail) {
       window.dispatchEvent(
         new CustomEvent('showToast', {
           detail: {
@@ -358,7 +360,7 @@ const DeveloperDashboard = () => {
       )
 
       const result = await apiService.createProject({
-        developer_email: userInfo.email,
+        developer_email: userEmail,
         name: formData.name,
         description: formData.description,
         factory_tx_hash: txHash,
@@ -371,10 +373,21 @@ const DeveloperDashboard = () => {
           success: true,
           message: 'Project created successfully!'
         })
+        const newProject = result.data.project
+        if (newProject) {
+          setProjects((prev) => {
+            const existingIds = new Set(prev.map((project) => project.id))
+            if (existingIds.has(newProject.id)) {
+              return prev
+            }
+
+            return [newProject, ...prev]
+          })
+        }
         setFormData({ name: '', description: '', supported_token_address: '' })
         setPlans([{ id: generatePlanId(), name: '', price: '', period_seconds: '' }])
         // Clear cache and refresh projects list
-        const cacheKey = `developer_projects_${userInfo.email}`
+        const cacheKey = `developer_projects_${userEmail}`
         localStorage.removeItem(cacheKey)
         await loadProjects()
         
