@@ -184,7 +184,6 @@ async function fetchDueSubscriptions(limit) {
        LIMIT $2`,
       [now, limit]
     );
-
     return rows.map(row => ({
       subscriptionId: row.subscription_id,
       userRecordId: row.user_record_id,

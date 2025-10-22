@@ -361,7 +361,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const initializeUser = async () => {
       const currentEmail = user?.email?.address;
       const walletAddress = user?.wallet?.address;
-      
+
 
       // Reset state when user changes
       if (lastInitializedEmail.current !== currentEmail) {
@@ -381,6 +381,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isProcessingRef.current ||
         lastInitializedEmail.current === currentEmail
       ) {
+        return;
+      }
+
+      if (!walletAddress) {
+        console.log('Waiting for wallet address before initializing user');
         return;
       }
 
@@ -433,6 +438,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.warn("Could not parse smart account from localStorage");
         }
 
+        if (!smartAccountAddress) {
+          console.log('Waiting for smart account before creating user record');
+          return;
+        }
+
         // Only fetch user info if not cached
         if (!hasValidCache) {
           const userResult = await apiService.getUserInfo();
@@ -449,7 +459,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // console.log("User not found, creating new user...");
             const createResult = await apiService.createUser({
               email: currentEmail,
-              wallet_address: walletAddress || "",
+              wallet_address: walletAddress,
               smart_account_address: smartAccountAddress,
             });
 
