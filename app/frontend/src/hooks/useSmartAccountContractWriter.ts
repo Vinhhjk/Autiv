@@ -10,9 +10,78 @@ import { getDeleGatorEnvironment } from '@metamask/delegation-toolkit'
 import { DelegationManager } from '@metamask/delegation-toolkit/contracts'
 import { monadTestnet } from 'viem/chains'
 import SubscriptionManagerABI from '../contracts/SubscriptionManager.json'
+import SubscriptionManagerFactoryABI from '../contracts/SubscriptionManagerFactory.json'
+import MockUSDCABI from '../contracts/MockUSDC.json'
 import { apiService } from '../services/api'
 
 const MONAD_TESTNET_CHAIN_ID = 10143
+const CONFIG_CACHE_KEY_PREFIX = 'autiv.contractConfig'
+const CONFIG_CACHE_TTL_MS = 5 * 60 * 1000
+
+type CachedContractConfig = {
+  subscriptionManagerAddress: `0x${string}`
+  tokenAddress: `0x${string}`
+  timestamp: number
+}
+
+const getContractConfigCacheKey = (projectId: string): string => `${CONFIG_CACHE_KEY_PREFIX}:${projectId}`
+
+const readCachedContractConfig = (projectId: string): CachedContractConfig | null => {
+  if (!projectId) return null
+
+  try {
+    const raw = localStorage.getItem(getContractConfigCacheKey(projectId))
+    if (!raw) {
+      return null
+    }
+
+    const parsed = JSON.parse(raw) as CachedContractConfig
+    if (
+      !parsed ||
+      typeof parsed.timestamp !== 'number' ||
+      !parsed.subscriptionManagerAddress ||
+      !parsed.tokenAddress
+    ) {
+      localStorage.removeItem(getContractConfigCacheKey(projectId))
+      return null
+    }
+
+    const isExpired = Date.now() - parsed.timestamp > CONFIG_CACHE_TTL_MS
+    if (isExpired) {
+      localStorage.removeItem(getContractConfigCacheKey(projectId))
+      return null
+    }
+
+    return parsed
+  } catch (error) {
+    console.warn('Failed to parse cached contract config:', error)
+    localStorage.removeItem(getContractConfigCacheKey(projectId))
+    return null
+  }
+}
+
+const writeCachedContractConfig = (
+  projectId: string,
+  config: { subscriptionManagerAddress: `0x${string}`; tokenAddress: `0x${string}` }
+): void => {
+  if (!projectId) return
+
+  try {
+    const payload: CachedContractConfig = {
+      subscriptionManagerAddress: config.subscriptionManagerAddress,
+      tokenAddress: config.tokenAddress,
+      timestamp: Date.now(),
+    }
+    localStorage.setItem(getContractConfigCacheKey(projectId), JSON.stringify(payload))
+  } catch (error) {
+    console.warn('Failed to cache contract config:', error)
+  }
+}
+
+const removeCachedContractConfig = (projectId: string): void => {
+  if (!projectId) return
+  localStorage.removeItem(getContractConfigCacheKey(projectId))
+}
 
 // Define subscription data type - using string to avoid BigInt serialization issues
 interface SubscriptionData {
@@ -28,6 +97,14 @@ interface FlexibleSmartAccount {
   address: `0x${string}`;
   isDeployed: () => Promise<boolean>;
   [key: string]: unknown;
+}
+
+type TransferTokenParams = {
+  smartAccount: FlexibleSmartAccount
+  tokenAddress: `0x${string}`
+  recipient: `0x${string}`
+  amount: number
+  decimals?: number
 }
 
 type SignedDelegation = Delegation & { signature: string; salt?: string | number | bigint }
@@ -63,7 +140,7 @@ const serializeDelegation = (delegation: SignedDelegation): Record<string, unkno
 export const useSmartAccountContractWriter = () => {
   useAccount()
   const { data: walletClient } = useWalletClient()
-  const { sendTransaction, user } = usePrivy()
+  const { sendTransaction, user, authenticated } = usePrivy()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   
@@ -112,6 +189,17 @@ export const useSmartAccountContractWriter = () => {
       throw new Error('Demo project ID is not configured')
     }
 
+    const cachedConfig = readCachedContractConfig(projectId)
+    if (cachedConfig) {
+      const config = {
+        subscriptionManagerAddress: cachedConfig.subscriptionManagerAddress,
+        tokenAddress: cachedConfig.tokenAddress,
+        projectId,
+      }
+      setContractConfig(config)
+      return config
+    }
+
     try {
       const response = await apiService.getProjectContractConfig(projectId)
 
@@ -132,18 +220,87 @@ export const useSmartAccountContractWriter = () => {
       }
 
       setContractConfig(config)
+      writeCachedContractConfig(projectId, {
+        subscriptionManagerAddress: config.subscriptionManagerAddress,
+        tokenAddress: config.tokenAddress
+      })
       return config
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to load contract configuration'
+      removeCachedContractConfig(projectId)
       throw new Error(message)
     }
   }, [contractConfig])
 
   useEffect(() => {
-    loadContractConfig().catch((error) => {
+    if (!authenticated) {
+      return
+    }
+
+    loadContractConfig().catch((error: unknown) => {
+      if (error instanceof Error && error.message === 'Authentication required') {
+        return
+      }
       console.error('Error preloading contract configuration:', error)
     })
-  }, [loadContractConfig])
+  }, [authenticated, loadContractConfig])
+
+  const deploySubscriptionManager = async (
+    smartAccount: FlexibleSmartAccount,
+    ownerAddress: `0x${string}`,
+    planNames: string[],
+    planPrices: bigint[],
+    planPeriods: bigint[],
+    planTokens: `0x${string}`[]
+  ) => {
+    if (!smartAccount) {
+      throw new Error('Smart Account not available')
+    }
+
+    if (!bundlerClient || !paymasterClient) {
+      throw new Error('Bundler or Paymaster client not available')
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const factoryAddress = import.meta.env.VITE_SUBSCRIPTION_MANAGER_FACTORY
+      if (!factoryAddress) {
+        throw new Error('Subscription manager factory address not configured')
+      }
+
+      const calldata = encodeFunctionData({
+        abi: SubscriptionManagerFactoryABI.abi,
+        functionName: 'createSubscriptionManager',
+        args: [ownerAddress, planNames, planPrices, planPeriods, planTokens]
+      })
+
+      const userOperationHash: `0x${string}` = await bundlerClient.sendUserOperation({
+        account: smartAccount as unknown as ViemSmartAccount,
+        calls: [
+          {
+            to: factoryAddress as `0x${string}`,
+            data: calldata,
+          },
+        ],
+        paymaster: paymasterClient,
+        paymasterContext: {
+          policyId: import.meta.env.VITE_ALCHEMY_GAS_POLICY_ID,
+        },
+      })
+
+      const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOperationHash })
+      const txHash = receipt?.receipt?.transactionHash || userOperationHash
+
+      return { txHash }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Smart Account factory deployment failed')
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const subscribeWithSmartAccount = async (
     smartAccount: FlexibleSmartAccount,
@@ -383,6 +540,56 @@ export const useSmartAccountContractWriter = () => {
     return null
   }
 
+  const claimMockUSDCWithSmartAccount = async (
+    smartAccount: FlexibleSmartAccount,
+    tokenAddress?: `0x${string}`
+  ) => {
+    if (!smartAccount) {
+      throw new Error('Smart Account not available')
+    }
+
+    const config = await loadContractConfig()
+    const resolvedTokenAddress = (tokenAddress ?? config.tokenAddress) as `0x${string}`
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      if (!bundlerClient || !paymasterClient) {
+        throw new Error('Bundler or Paymaster client not available')
+      }
+
+      const claimCalldata = encodeFunctionData({
+        abi: MockUSDCABI.abi,
+        functionName: 'claim',
+        args: [],
+      })
+
+      const userOperationHash: `0x${string}` = await bundlerClient.sendUserOperation({
+        account: smartAccount as unknown as ViemSmartAccount,
+        calls: [
+          {
+            to: resolvedTokenAddress,
+            data: claimCalldata,
+          },
+        ],
+        paymaster: paymasterClient,
+        paymasterContext: {
+          policyId: import.meta.env.VITE_ALCHEMY_GAS_POLICY_ID,
+        },
+      })
+
+      await bundlerClient.waitForUserOperationReceipt({ hash: userOperationHash })
+
+      return userOperationHash
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Smart Account claim failed')
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const cancelSubscriptionWithSmartAccount = async (
     smartAccount: FlexibleSmartAccount,
     tokenAddress?: string,
@@ -496,7 +703,7 @@ export const useSmartAccountContractWriter = () => {
 
       const cancelReceipt = await bundlerClient.waitForUserOperationReceipt({ hash: cancelUoHash })
       const txHash = cancelReceipt?.receipt?.transactionHash || cancelUoHash
-      console.log('Combined transaction confirmed:', txHash)
+      console.log('Cancel transaction confirmed:', txHash)
       // Call API to cancel subscription in database
       if (user?.email?.address && user?.wallet?.address && txHash) {
         try {
@@ -577,6 +784,69 @@ export const useSmartAccountContractWriter = () => {
     }
   }
 
+  const transferTokenFromSmartAccount = async ({
+    smartAccount,
+    tokenAddress,
+    recipient,
+    amount,
+    decimals = 18,
+  }: TransferTokenParams) => {
+    if (!smartAccount) {
+      throw new Error('Smart Account not available')
+    }
+
+    if (!bundlerClient || !paymasterClient) {
+      throw new Error('Bundler or Paymaster client not available')
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const amountInUnits = parseUnits(amount.toString(), decimals)
+
+      const transferCalldata = encodeFunctionData({
+        abi: [
+          {
+            "constant": false,
+            "inputs": [
+              { "internalType": "address", "name": "to", "type": "address" },
+              { "internalType": "uint256", "name": "amount", "type": "uint256" }
+            ],
+            "name": "transfer",
+            "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ] as const,
+        functionName: 'transfer',
+        args: [recipient, amountInUnits]
+      })
+
+      const userOperationHash: `0x${string}` = await bundlerClient.sendUserOperation({
+        account: smartAccount as unknown as ViemSmartAccount,
+        calls: [
+          {
+            to: tokenAddress,
+            data: transferCalldata
+          }
+        ],
+        paymaster: paymasterClient,
+        paymasterContext: {
+          policyId: import.meta.env.VITE_ALCHEMY_GAS_POLICY_ID,
+        },
+      })
+
+      const receipt = await bundlerClient.waitForUserOperationReceipt({ hash: userOperationHash })
+      return receipt?.receipt?.transactionHash || userOperationHash
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Smart Account token transfer failed')
+      throw err
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const fundSmartAccountWithETH = async (smartAccount: FlexibleSmartAccount, amount: number) => {
     if (!smartAccount) {
       throw new Error('Smart Account not available')
@@ -607,11 +877,14 @@ export const useSmartAccountContractWriter = () => {
   }
 
   return {
+    deploySubscriptionManager,
     subscribeWithSmartAccount,
+    claimMockUSDCWithSmartAccount,
     cancelSubscriptionWithSmartAccount,
     transferUSDCToSmartAccount,
+    transferTokenFromSmartAccount,
     fundSmartAccountWithETH,
     isLoading,
-    error
+    error,
   }
 }

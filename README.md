@@ -56,7 +56,7 @@ export const AGENT_ADDRESS = '<YOUR AGENT ADDRESS HERE>'
 ```
 
 ### Smart contracts setup (`/contracts`)
-Add environment variables
+- Add environment variables
 ```
 EOA_PRIVATE_KEY = 
 ALCHEMY_POLICY_ID =
@@ -67,11 +67,16 @@ DATABASE_URL
 ```
 > Note: EOA_PRIVATE_KEY is private key for agent address that will later be used for collection payment. `DATABASE_URL` is a postgres url of your Xata Database.
 
+- Deploy a mock USDC token
+```bash
+npm run deploy-mock-usdc
+```
+- Add the address of your deployed token to `_setupInitialAllowedTokens()` in `/contract/contracts/SubscriptionManagerFactory.sol`
 
-Deploy the Subscription Manager (replace the USDC address in `/contracts/contract/scripts/deploy-monad.ts` to your own token
+- Deploy the Subscription Manager Factory and Subscription Manager (replace the mockUsdcAddress in `contract/scripts/deploy-monad.ts` to your own token
 
 ```bash
-npm run deploy:monad
+npm run deploy
 ```
 Copy `SUBSCRIPTION_MANAGER` and `USDC_ADDRESS` values in `deployment-addresses.json` and prepare for database setup
 
@@ -101,6 +106,11 @@ XATA_API_KEY=
 ```
 
 > **Note:** `DATABASE_URL` is the PostgreSQL connection string used by helper scripts `migrate.js` to setup database, while `DATABASE_URL_HTTPS` is required by Xata’s HTTP API to test if needed. 
+- Deploy the database to Xata
+```bash
+npm run migrate
+```
+>Note: You can run `npm run migrate:seed` if you need to some initial data for testing
 
 ### Cloudflare worker setup
 ```
@@ -108,6 +118,7 @@ PRIVY_APP_ID=
 DATABASE_URL_HTTPS=
 XATA_API_KEY=
 HYPERSYNC_API=
+SUBSCRIPTION_MANAGER_FACTORY=
 ```
 
 > **Note:** Use `npx wrangler secret put <ENV KEY HERE>` to add environment variables to Cloudflare.

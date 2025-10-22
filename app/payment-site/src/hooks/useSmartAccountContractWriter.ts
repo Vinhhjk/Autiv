@@ -90,6 +90,7 @@ export const useSmartAccountContractWriter = () => {
     planPrice: number,
     tokenAddress: string,
     subscriptionManagerAddress: `0x${string}`,
+    projectIdOverride?: string,
     signedApproveDelegation?: SignedDelegation,
     signedProcessPaymentDelegation?: SignedDelegation
   ) => {
@@ -195,8 +196,10 @@ export const useSmartAccountContractWriter = () => {
         try {
           const currentTime = Math.floor(Date.now() / 1000);
           
-          // Get project_id from environment or use demo default
-          const projectId = import.meta.env.VITE_DEMO_PROJECT_ID || 'rec_demo_project_1';
+          if (!projectIdOverride) {
+            throw new Error('Missing projectId in payment session metadata')
+          }
+          const projectId = projectIdOverride;
           
           // Prepare delegation data with both approve and processPayment delegations
           const delegationData = (signedApproveDelegation && signedProcessPaymentDelegation) ? {

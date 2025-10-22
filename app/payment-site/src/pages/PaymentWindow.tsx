@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { CreditCard, Shield, Clock, CheckCircle2, AlertTriangle, ArrowLeft } from 'lucide-react'
+import { CreditCard, Shield, Clock, CheckCircle2, AlertTriangle, ArrowLeft, ChevronDown } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth'
 import { apiService, type PaymentSession, type PaymentSessionStatus } from '../services/api'
 import { useSmartAccount } from '../hooks/useSmartAccount'
@@ -96,12 +96,13 @@ const statusStyles: Record<PaymentSessionStatus, { label: string; background: st
 const PaymentWindow = () => {
   const { paymentId } = useParams()
   const navigate = useNavigate()
-  const { authenticated, login, refreshUserData } = useAuth()
+  const { authenticated, login, refreshUserData, user, logout } = useAuth()
   const {
     createSmartAccount,
     smartAccountResult,
     isLoading: smartAccountLoading,
     error: smartAccountError,
+    isWalletClientReady,
   } = useSmartAccount()
   const {
     subscribeWithSmartAccount,
@@ -123,6 +124,7 @@ const PaymentWindow = () => {
   const [delegationStep, setDelegationStep] = useState<'creating' | 'signing' | 'subscribing' | 'finalizing' | null>(null)
   const [txHash, setTxHash] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [showAccountMenu, setShowAccountMenu] = useState(false)
 
   const fetchSession = useCallback(async (showSpinner = false) => {
     if (!paymentId) return
@@ -168,6 +170,30 @@ const PaymentWindow = () => {
     }, 1000)
     return () => clearInterval(interval)
   }, [session])
+
+  useEffect(() => {
+    if (!authenticated || !isWalletClientReady) return
+    if (smartAccountResult?.smartAccount) return
+    let cancelled = false
+
+    const ensureSmartAccount = async () => {
+      try {
+        const created = await createSmartAccount()
+        if (cancelled) return
+        if (!created?.smartAccount) {
+          console.warn('Smart account creation returned no account')
+        }
+      } catch (err) {
+        console.error('Auto smart account creation failed:', err)
+      }
+    }
+
+    ensureSmartAccount()
+
+    return () => {
+      cancelled = true
+    }
+  }, [authenticated, createSmartAccount, isWalletClientReady, smartAccountResult?.smartAccount])
 
   const handleRealPayment = async () => {
     if (!session || !paymentId || session.status === 'paid' || session.status === 'expired') return
@@ -226,12 +252,17 @@ const PaymentWindow = () => {
         throw new Error('Invalid plan identifier for subscription')
       }
 
+      const metadataProjectId = typeof session.metadata?.projectId === 'string'
+        ? session.metadata.projectId
+        : (typeof session.metadata?.project_id === 'string' ? session.metadata.project_id : undefined)
+
       const resultingTxHash = await subscribeWithSmartAccount(
         smartAccount,
         Number(numericPlanId),
         session.amount,
         session.tokenAddress,
         subscriptionManagerAddress,
+        metadataProjectId,
         signedApproveDelegation,
         signedProcessPaymentDelegation
       )
@@ -273,6 +304,37 @@ const PaymentWindow = () => {
   }
 
   const countdown = useMemo(() => formatDuration(secondsRemaining), [secondsRemaining])
+
+  const normalizedEmail = useMemo(() => {
+    if (!user) return undefined
+    const emailField = (user as { email?: unknown }).email
+    if (typeof emailField === 'string') {
+      return emailField
+    }
+    if (
+      typeof emailField === 'object' &&
+      emailField !== null &&
+      'address' in emailField &&
+      typeof (emailField as { address?: unknown }).address === 'string'
+    ) {
+      return (emailField as { address: string }).address
+    }
+    return undefined
+  }, [user])
+
+  const displayEmail = useMemo(() => {
+    if (!normalizedEmail) return undefined
+    if (normalizedEmail.length <= 24) return normalizedEmail
+    const [localPart, domain] = normalizedEmail.split('@')
+    if (!domain) return normalizedEmail
+    const shortenedLocal = localPart.length > 12 ? `${localPart.slice(0, 9)}…` : localPart
+    return `${shortenedLocal}@${domain}`
+  }, [normalizedEmail])
+
+  const handleLogout = async () => {
+    setShowAccountMenu(false)
+    await logout()
+  }
 
   const renderStatusIcon = () => {
     switch (session?.status) {
@@ -378,7 +440,7 @@ const PaymentWindow = () => {
       >
         {/* Status banner */}
         <div
-          className="flex items-center justify-between px-6 py-4 border-b-4 border-black"
+          className="relative flex flex-wrap items-center justify-between gap-4 px-6 py-4 border-b-4 border-black"
           style={{ backgroundColor: currentStatus.background, color: currentStatus.text, borderColor: currentStatus.border }}
         >
           <div className="flex items-center gap-3">
@@ -390,9 +452,46 @@ const PaymentWindow = () => {
               <p className="text-sm md:text-base font-semibold">Payment ID #{session.paymentId}</p>
             </div>
           </div>
-          <div className="hidden sm:flex items-center gap-3 font-bold text-base">
-            <Clock className="w-5 h-5" />
-            <span>Expires in {countdown}</span>
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex items-center gap-3 font-bold text-base">
+              <Clock className="w-5 h-5" />
+              <span>Expires in {countdown}</span>
+            </div>
+            {authenticated && displayEmail && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowAccountMenu(prev => !prev)}
+                  className="flex items-center gap-2 px-4 py-2 font-black text-sm md:text-base"
+                  style={{
+                    backgroundColor: '#000000',
+                    color: currentStatus.background,
+                    border: '3px solid #000000',
+                    boxShadow: '4px 4px 0px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  <span>{displayEmail}</span>
+                  <ChevronDown className="w-4 h-4" />
+                </button>
+                {showAccountMenu && (
+                  <div
+                    className="absolute right-0 mt-2 w-48 z-10"
+                    style={{
+                      border: '3px solid #000000',
+                      backgroundColor: '#ffffff',
+                      boxShadow: '6px 6px 0px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-3 font-black text-sm hover:bg-gray-100"
+                      style={{ color: '#000000' }}
+                    >
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -488,7 +587,6 @@ const PaymentWindow = () => {
                     <AlertTriangle className="w-5 h-5 text-black" />
                     <div>
                       <p className="font-black text-black">Session expired.</p>
-                      <p className="text-sm font-semibold text-gray-700">Return to the demo page to request a new payment window.</p>
                     </div>
                   </div>
                 )}

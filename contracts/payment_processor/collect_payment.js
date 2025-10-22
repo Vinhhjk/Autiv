@@ -13,10 +13,8 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const DATABASE_URL = process.env.DATABASE_URL
-const MONAD_RPC_URL = process.env.MONAD_RPC_URL || 'https://testnet-rpc.monad.xyz';
-const HYPERSYNC_RPC_URL = process.env.HYPERSYNC_API
-  ? `https://monad-testnet.rpc.hypersync.xyz/${process.env.HYPERSYNC_API}`
-  : 'https://monad-testnet.rpc.hypersync.xyz';
+const MONAD_RPC_URL = 'https://testnet-rpc.monad.xyz';
+const HYPERSYNC_RPC_URL = `https://monad-testnet.rpc.hypersync.xyz/${process.env.HYPERSYNC_API}`
 const MONAD_TESTNET_CHAIN_ID = 10143;
 
 const MAX_CONCURRENT_PAYMENTS = Number(process.env.PAYMENT_BATCH_SIZE || 20);
@@ -87,7 +85,7 @@ async function withRateLimit(fn, label = 'rpc') {
       const backoffIndex = Math.min(attempt, RATE_LIMIT_BACKOFFS.length - 1);
       const waitMs = RATE_LIMIT_BACKOFFS[backoffIndex];
       attempt++;
-      console.log(`[${label}] rate limit hit – backing off ${waitMs / 1000}s (attempt ${attempt})`);
+      console.log(`[${label}] rate limit hit - backing off ${waitMs / 1000}s (attempt ${attempt})`);
       await sleep(waitMs);
     }
   }
@@ -118,7 +116,7 @@ async function initialize() {
     throw new Error('Delegation environment not available for Monad Testnet');
   }
 
-  const subscriptionManagerArtifact = await import('../SubscriptionManager.json', { with: { type: 'json' } });
+  const subscriptionManagerArtifact = await import('../artifacts/contract/contracts/SubscriptionManager.sol/SubscriptionManager.json', { with: { type: 'json' } });
   subscriptionManagerAbi = subscriptionManagerArtifact.default?.abi || subscriptionManagerArtifact.abi;
 
   initialized = true;

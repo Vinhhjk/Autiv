@@ -15,80 +15,230 @@ const CACHE_KEYS = {
   CACHE_TIMESTAMP: 'autiv.cacheTimestamp'
 };
 
+const SMART_ACCOUNT_KEY = 'autiv.smartAccount';
+
 // Cache expiration time (5 minutes)
 const CACHE_EXPIRATION_MS = 5 * 60 * 1000;
 
+const getTimestampKey = (email?: string): string =>
+  email ? `${CACHE_KEYS.CACHE_TIMESTAMP}:${email.toLowerCase()}` : CACHE_KEYS.CACHE_TIMESTAMP;
+
+const removeTimestampForEmail = (email?: string): void => {
+  if (!email) return;
+  localStorage.removeItem(getTimestampKey(email));
+};
+
+const getTimestampValue = (expectedEmail?: string): string | null => {
+  if (expectedEmail) {
+    const scoped = localStorage.getItem(getTimestampKey(expectedEmail));
+    if (scoped) return scoped;
+  }
+  return localStorage.getItem(CACHE_KEYS.CACHE_TIMESTAMP);
+};
+
+const clearAllTimestampEntries = (): void => {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const storageKey = localStorage.key(i);
+    if (storageKey && storageKey.startsWith(`${CACHE_KEYS.CACHE_TIMESTAMP}:`)) {
+      keysToRemove.push(storageKey);
+    }
+  }
+  keysToRemove.forEach((key) => localStorage.removeItem(key));
+  localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
+};
+
 // Cache utility functions
-const getCachedUserInfo = (): UserInfo | null => {
+type CacheEnvelope<T> = {
+  email?: string;
+  data: T;
+  timestamp?: number;
+};
+
+const sanitizeTimestamp = (value?: number | null): number | undefined => {
+  if (typeof value !== 'number') return undefined;
+  return Number.isNaN(value) ? undefined : value;
+};
+
+const normalizeCacheEntry = <T,>(rawValue: string | null, fallbackTimestamp: string | null): {
+  data: T | null;
+  email?: string;
+  timestamp?: number;
+} => {
+  if (!rawValue) {
+    return { data: null };
+  }
+
   try {
-    const cached = localStorage.getItem(CACHE_KEYS.USER_INFO);
-    const timestamp = localStorage.getItem(CACHE_KEYS.CACHE_TIMESTAMP);
-    
-    if (!cached || !timestamp) return null;
-    
-    const cacheAge = Date.now() - parseInt(timestamp);
-    if (cacheAge > CACHE_EXPIRATION_MS) {
-      // Cache expired, clear it
+    const parsed = JSON.parse(rawValue) as CacheEnvelope<T> | T;
+    if (parsed && typeof parsed === 'object' && 'data' in parsed) {
+      const envelope = parsed as CacheEnvelope<T>;
+      const normalizedEmail = typeof envelope.email === 'string' ? envelope.email.toLowerCase() : undefined;
+      const timestampFromEnvelope = sanitizeTimestamp(envelope.timestamp ?? null);
+      const timestampFromFallback = fallbackTimestamp ? sanitizeTimestamp(Number(fallbackTimestamp)) : undefined;
+      const timestamp = timestampFromEnvelope ?? timestampFromFallback;
+
+      return {
+        data: envelope.data,
+        email: normalizedEmail,
+        timestamp,
+      };
+    }
+
+    const legacy = parsed as T & { email?: string };
+    const normalizedEmail = typeof legacy?.email === 'string' ? legacy.email.toLowerCase() : undefined;
+    const timestampFromFallback = fallbackTimestamp ? sanitizeTimestamp(Number(fallbackTimestamp)) : undefined;
+
+    return {
+      data: parsed as T,
+      email: normalizedEmail,
+      timestamp: timestampFromFallback,
+    };
+  } catch (error) {
+    console.warn('Failed to parse cached entry:', error);
+    return { data: null };
+  }
+};
+
+const hasExpired = (timestamp?: number): boolean => {
+  if (!timestamp) return true;
+  const age = Date.now() - timestamp;
+  return Number.isNaN(age) || age > CACHE_EXPIRATION_MS;
+};
+
+const getCachedUserInfo = (expectedEmail?: string): UserInfo | null => {
+  try {
+    const raw = localStorage.getItem(CACHE_KEYS.USER_INFO);
+    const timestampValue = getTimestampValue(expectedEmail);
+    const { data, email, timestamp } = normalizeCacheEntry<UserInfo>(raw, timestampValue);
+
+    if (!data) return null;
+
+    const normalizedExpected = expectedEmail?.toLowerCase();
+    if (normalizedExpected) {
+      const candidateEmail = email ?? (typeof data.email === 'string' ? data.email.toLowerCase() : undefined);
+      if (!candidateEmail || candidateEmail !== normalizedExpected) {
+        localStorage.removeItem(CACHE_KEYS.USER_INFO);
+        if (candidateEmail) {
+          removeTimestampForEmail(candidateEmail);
+        }
+        removeTimestampForEmail(normalizedExpected);
+        localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
+        return null;
+      }
+    }
+
+    const fallback = timestampValue ? sanitizeTimestamp(Number(timestampValue)) : undefined;
+    const effectiveTimestamp = timestamp ?? fallback;
+    if (effectiveTimestamp && hasExpired(effectiveTimestamp)) {
       localStorage.removeItem(CACHE_KEYS.USER_INFO);
+      if (email) {
+        removeTimestampForEmail(email);
+      }
+      if (normalizedExpected) {
+        removeTimestampForEmail(normalizedExpected);
+      }
       localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
       return null;
     }
-    
-    return JSON.parse(cached);
+
+    return data;
   } catch (error) {
     console.warn('Failed to get cached user info:', error);
     return null;
   }
 };
 
-const getCachedSubscriptions = (): Subscription[] | null => {
+const getCachedSubscriptions = (expectedEmail?: string): Subscription[] | null => {
   try {
-    const cached = localStorage.getItem(CACHE_KEYS.SUBSCRIPTIONS);
-    const timestamp = localStorage.getItem(CACHE_KEYS.CACHE_TIMESTAMP);
-    
-    if (!cached || !timestamp) return null;
-    
-    const cacheAge = Date.now() - parseInt(timestamp);
-    if (cacheAge > CACHE_EXPIRATION_MS) {
-      // Cache expired, clear it
+    const raw = localStorage.getItem(CACHE_KEYS.SUBSCRIPTIONS);
+    const timestampValue = getTimestampValue(expectedEmail);
+    const { data, email, timestamp } = normalizeCacheEntry<Subscription[]>(raw, timestampValue);
+
+    if (!data) return null;
+
+    if (expectedEmail) {
+      const normalizedExpected = expectedEmail.toLowerCase();
+      if (!email || email !== normalizedExpected) {
+        localStorage.removeItem(CACHE_KEYS.SUBSCRIPTIONS);
+        removeTimestampForEmail(email);
+        removeTimestampForEmail(normalizedExpected);
+        localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
+        return null;
+      }
+    }
+
+    const fallback = timestampValue ? sanitizeTimestamp(Number(timestampValue)) : undefined;
+    const effectiveTimestamp = timestamp ?? fallback;
+    if (effectiveTimestamp && hasExpired(effectiveTimestamp)) {
       localStorage.removeItem(CACHE_KEYS.SUBSCRIPTIONS);
+      removeTimestampForEmail(email);
+      if (expectedEmail) {
+        removeTimestampForEmail(expectedEmail);
+      }
       localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
       return null;
     }
-    
-    return JSON.parse(cached);
+
+    return data;
   } catch (error) {
     console.warn('Failed to get cached subscriptions:', error);
     return null;
   }
 };
 
-const getCachedDeveloperInfo = (): Developer | null => {
+const getCachedDeveloperInfo = (expectedEmail?: string): Developer | null => {
   try {
-    const cached = localStorage.getItem(CACHE_KEYS.DEVELOPER_INFO);
-    const timestamp = localStorage.getItem(CACHE_KEYS.CACHE_TIMESTAMP);
-    
-    if (!cached || !timestamp) return null;
-    
-    const cacheAge = Date.now() - parseInt(timestamp);
-    if (cacheAge > CACHE_EXPIRATION_MS) {
-      // Cache expired, clear it
+    const raw = localStorage.getItem(CACHE_KEYS.DEVELOPER_INFO);
+    const timestampValue = getTimestampValue(expectedEmail);
+    const { data, email, timestamp } = normalizeCacheEntry<Developer>(raw, timestampValue);
+
+    if (!data) return null;
+
+    if (expectedEmail) {
+      const normalizedExpected = expectedEmail.toLowerCase();
+      if (!email || email !== normalizedExpected) {
+        localStorage.removeItem(CACHE_KEYS.DEVELOPER_INFO);
+        removeTimestampForEmail(email);
+        removeTimestampForEmail(normalizedExpected);
+        localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
+        return null;
+      }
+    }
+
+    const fallback = timestampValue ? sanitizeTimestamp(Number(timestampValue)) : undefined;
+    const effectiveTimestamp = timestamp ?? fallback;
+    if (effectiveTimestamp && hasExpired(effectiveTimestamp)) {
       localStorage.removeItem(CACHE_KEYS.DEVELOPER_INFO);
+      removeTimestampForEmail(email);
+      if (expectedEmail) {
+        removeTimestampForEmail(expectedEmail);
+      }
       localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
       return null;
     }
-    
-    return JSON.parse(cached);
+
+    return data;
   } catch (error) {
     console.warn('Failed to get cached developer info:', error);
     return null;
   }
 };
 
-const setCachedData = (key: string, data: UserInfo | Subscription[] | Developer): void => {
+const setCachedData = (key: string, data: UserInfo | Subscription[] | Developer, email?: string): void => {
+  if (!email) return;
+
   try {
-    localStorage.setItem(key, JSON.stringify(data));
-    localStorage.setItem(CACHE_KEYS.CACHE_TIMESTAMP, Date.now().toString());
+    const timestamp = Date.now();
+    const entry: CacheEnvelope<UserInfo | Subscription[] | Developer> = {
+      email: email.toLowerCase(),
+      data,
+      timestamp,
+    };
+
+    localStorage.setItem(key, JSON.stringify(entry));
+    localStorage.setItem(getTimestampKey(email), timestamp.toString());
+    localStorage.removeItem(CACHE_KEYS.CACHE_TIMESTAMP);
   } catch (error) {
     console.warn(`Failed to cache data for ${key}:`, error);
   }
@@ -98,6 +248,8 @@ const clearCache = (): void => {
   Object.values(CACHE_KEYS).forEach(key => {
     localStorage.removeItem(key);
   });
+  localStorage.removeItem(SMART_ACCOUNT_KEY);
+  clearAllTimestampEntries();
 };
 
 interface AuthContextType {
@@ -177,7 +329,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (subscriptionsResult.success && subscriptionsResult.data) {
         setSubscriptions(subscriptionsResult.data.subscriptions);
         // Update cache with fresh data
-        setCachedData(CACHE_KEYS.SUBSCRIPTIONS, subscriptionsResult.data.subscriptions);
+        setCachedData(CACHE_KEYS.SUBSCRIPTIONS, subscriptionsResult.data.subscriptions, user.email.address);
       }
     } catch (error) {
       console.error("Error refreshing user data:", error);
@@ -194,7 +346,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const developerResult = await apiService.getDeveloperInfo();
       if (developerResult.success && developerResult.data?.found && developerResult.data.developer) {
         setDeveloperInfo(developerResult.data.developer);
-        setCachedData(CACHE_KEYS.DEVELOPER_INFO, developerResult.data.developer);
+        setCachedData(CACHE_KEYS.DEVELOPER_INFO, developerResult.data.developer, user.email.address);
       } else {
         setDeveloperInfo(null);
         localStorage.removeItem(CACHE_KEYS.DEVELOPER_INFO);
@@ -233,13 +385,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // First, try to load from cache
-      const cachedUserInfo = getCachedUserInfo();
-      const cachedSubscriptions = getCachedSubscriptions();
-      const cachedDeveloperInfo = getCachedDeveloperInfo();
+      const cachedUserInfo = getCachedUserInfo(currentEmail);
+      const cachedSubscriptions = getCachedSubscriptions(currentEmail);
+      const cachedDeveloperInfo = getCachedDeveloperInfo(currentEmail);
 
       let hasValidCache = false;
 
-      if (cachedUserInfo && cachedUserInfo.email === currentEmail) {
+      if (cachedUserInfo) {
         // console.log("Loaded user info from cache:", cachedUserInfo);
         setUserInfo(cachedUserInfo);
         hasValidCache = true;
@@ -293,7 +445,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ) {
             // console.log("User found in database:", userResult.data.user);
             setUserInfo(userResult.data.user);
-            setCachedData(CACHE_KEYS.USER_INFO, userResult.data.user);
+            setCachedData(CACHE_KEYS.USER_INFO, userResult.data.user, currentEmail);
           } else if (userResult.success && !userResult.data?.found) {
             // console.log("User not found, creating new user...");
             const createResult = await apiService.createUser({
@@ -305,7 +457,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (createResult.success && createResult.data) {
               // console.log("User created successfully:", createResult.data);
               setUserInfo(createResult.data);
-              setCachedData(CACHE_KEYS.USER_INFO, createResult.data);
+              setCachedData(CACHE_KEYS.USER_INFO, createResult.data, currentEmail);
             } else {
               console.error("Failed to create user:", createResult.error);
             }
@@ -320,7 +472,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const subscriptionsResult = await apiService.getUserSubscriptions();
           if (subscriptionsResult.success && subscriptionsResult.data) {
             setSubscriptions(subscriptionsResult.data.subscriptions);
-            setCachedData(CACHE_KEYS.SUBSCRIPTIONS, subscriptionsResult.data.subscriptions);
+            setCachedData(CACHE_KEYS.SUBSCRIPTIONS, subscriptionsResult.data.subscriptions, currentEmail);
           }
         }
 
@@ -330,7 +482,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const developerResult = await apiService.getDeveloperInfo();
           if (developerResult.success && developerResult.data?.found && developerResult.data.developer) {
             setDeveloperInfo(developerResult.data.developer);
-            setCachedData(CACHE_KEYS.DEVELOPER_INFO, developerResult.data.developer);
+            setCachedData(CACHE_KEYS.DEVELOPER_INFO, developerResult.data.developer, currentEmail);
           } else {
             setDeveloperInfo(null);
           }

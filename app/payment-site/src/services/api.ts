@@ -188,17 +188,10 @@ class ApiService {
       }
 
       if (!response.ok) {
-        console.error("API request failed:", {
-          endpoint,
-          status: response.status,
-          statusText: response.statusText,
-          error: data.error || data,
-          responseText
-        });
         return {
           success: false,
           error:
-            data.error || `HTTP ${response.status}: ${response.statusText}`,
+            (data as { error?: string })?.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
 

@@ -24,6 +24,7 @@
     "ox": "^0.9.6",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.9.1",
     "tailwindcss": "^4.1.13",
     "valtio": "^2.1.8",

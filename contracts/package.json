@@ -1,18 +1,48 @@
 {
+  
   "scripts": {
-    "compile": "npx hardhat compile",
-    "deploy:monad": "npx tsx contract/scripts/deploy-monad.ts",
-    "deploy:local": "npx hardhat run scripts/deploy.ts --network hardhat"
+  
+    
+  "compile": "npx hardhat compile",
+  
+    
+  "deploy": "npx tsx contract/scripts/deploy-monad.ts",
+  
+    
+  "deploy-mock-usdc": "npx tsx contract/scripts/deploy-mock-usdc.ts"
+  
   },
+  
   "dependencies": {
-    "@metamask/delegation-toolkit": "^0.13.0",
-    "@openzeppelin/contracts": "^5.4.0",
-    "dotenv": "^17.2.2",
-    "ethers": "^6.15.0",
-    "hardhat": "^3.0.6",
-    "pg": "^8.16.3",
-    "typescript": "~5.8.0",
-    "viem": "^2.37.8"
+  
+    
+  "@envio-dev/hypersync-client": "^0.6.6",
+  
+    
+  "@metamask/delegation-toolkit": "^0.13.0",
+  
+    
+  "@openzeppelin/contracts": "^5.4.0",
+  
+    
+  "dotenv": "^17.2.2",
+  
+    
+  "ethers": "^6.15.0",
+  
+    
+  "hardhat": "^3.0.6",
+  
+    
+  "pg": "^8.16.3",
+  
+    
+  "typescript": "~5.8.0",
+  
+    
+  "viem": "^2.37.8"
+  
   },
+  
   "type": "module"
 }

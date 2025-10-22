@@ -212,4 +212,11 @@ contract SubscriptionManager is Ownable, ReentrancyGuard {
         return plans[_planId];
     }
     
+    /**
+     * @dev Returns the current owner of the subscription manager contract
+     */
+    function getOwner() external view returns (address) {
+        return owner();
+    }
+    
 }

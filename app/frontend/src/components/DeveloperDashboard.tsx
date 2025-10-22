@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { 
@@ -7,15 +7,38 @@ import {
   Settings, 
   CheckCircle, 
   AlertCircle,
-  Key
+  Key,
+  Trash2
 } from 'lucide-react'
-import { apiService, type Project } from '../services/api'
+import { apiService, type Project, type TokenMetadata } from '../services/api'
 import { useAuth } from '../hooks/useAuth'
 import DeveloperRegistration from './DeveloperRegistration'
+import { createPublicClient, http, parseUnits } from 'viem'
+import { monadTestnet } from 'viem/chains'
+import { useSmartAccount } from '../hooks/useSmartAccount'
+import { useSmartAccountContractWriter } from '../hooks/useSmartAccountContractWriter'
+
+const ERC20_DECIMALS_ABI = [
+  {
+    constant: true,
+    inputs: [],
+    name: 'decimals',
+    outputs: [{ name: '', type: 'uint8' }],
+    stateMutability: 'view',
+    type: 'function'
+  }
+]
+
+const generatePlanId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2)
 
 const DeveloperDashboard = () => {
   const navigate = useNavigate()
   const { userInfo, isDeveloper, refreshDeveloperData } = useAuth()
+  const { smartAccountResult, createSmartAccount } = useSmartAccount()
+  const { deploySubscriptionManager } = useSmartAccountContractWriter()
   const [projects, setProjects] = useState<Project[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const loadingRef = useRef(false)
@@ -25,13 +48,83 @@ const DeveloperDashboard = () => {
   const [isCheckingDeveloper, setIsCheckingDeveloper] = useState(false)
   const [createResult, setCreateResult] = useState<{ success: boolean; message: string } | null>(null)
 
+  const [supportedTokens, setSupportedTokens] = useState<TokenMetadata[]>([])
+  const [isLoadingTokens, setIsLoadingTokens] = useState(false)
+  const [tokenDecimals, setTokenDecimals] = useState<number | null>(null)
+  const [isTokenDropdownOpen, setIsTokenDropdownOpen] = useState(false)
+
+  const [plans, setPlans] = useState<Array<{ id: string; name: string; price: string; period_seconds: string }>>([
+    { id: generatePlanId(), name: '', price: '', period_seconds: '' }
+  ])
+
+  const publicClient = useMemo(() => {
+    return createPublicClient({
+      chain: monadTestnet,
+      transport: http('https://monad-testnet.drpc.org')
+    })
+  }, [])
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    subscription_manager_address: '',
-    token_address: ''
+    supported_token_address: ''
   })
+
+  const selectedToken = useMemo(
+    () => supportedTokens.find((token) => token.token_address === formData.supported_token_address) || null,
+    [formData.supported_token_address, supportedTokens]
+  )
+
+  const tokenDropdownRef = useRef<HTMLDivElement | null>(null)
+
+  const loadSupportedTokens = useCallback(async () => {
+    if (isLoadingTokens || supportedTokens.length > 0) return
+    setIsLoadingTokens(true)
+    try {
+      const result = await apiService.getSupportedTokens()
+      if (result.success && result.data) {
+        setSupportedTokens(result.data.tokens)
+      }
+    } catch (error) {
+      console.error('Failed to load supported tokens', error)
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Failed to load supported tokens',
+            type: 'error',
+          },
+        })
+      )
+    } finally {
+      setIsLoadingTokens(false)
+    }
+  }, [isLoadingTokens, supportedTokens.length])
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (!tokenDropdownRef.current) return
+      if (!tokenDropdownRef.current.contains(event.target as Node)) {
+        setIsTokenDropdownOpen(false)
+      }
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsTokenDropdownOpen(false)
+      }
+    }
+
+    if (isTokenDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isTokenDropdownOpen])
 
   const loadProjects = useCallback(async () => {
     if (!userInfo?.email || loadingRef.current) return
@@ -79,6 +172,43 @@ const DeveloperDashboard = () => {
     }
   }, [userInfo?.email, isDeveloper]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (showCreateForm) {
+      loadSupportedTokens()
+    }
+  }, [showCreateForm, loadSupportedTokens])
+
+  useEffect(() => {
+    const fetchDecimals = async () => {
+      if (!formData.supported_token_address) {
+        setTokenDecimals(null)
+        return
+      }
+
+      try {
+        const decimals = await publicClient.readContract({
+          address: formData.supported_token_address as `0x${string}`,
+          abi: ERC20_DECIMALS_ABI,
+          functionName: 'decimals'
+        })
+        setTokenDecimals(Number(decimals))
+      } catch (error) {
+        console.error('Failed to fetch token decimals', error)
+        window.dispatchEvent(
+          new CustomEvent('showToast', {
+            detail: {
+              message: 'Failed to fetch token decimals',
+              type: 'error',
+            },
+          })
+        )
+        setTokenDecimals(null)
+      }
+    }
+
+    fetchDecimals()
+  }, [formData.supported_token_address, publicClient])
+
   // Prevent body scroll when modals are open
   useEffect(() => {
     if (showCreateForm || showRegistrationForm) {
@@ -117,13 +247,123 @@ const DeveloperDashboard = () => {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!userInfo?.email) return
+    if (!userInfo?.email) {
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Sign in to create a project',
+            type: 'error',
+          },
+        })
+      )
+      return
+    }
+
+    if (!formData.supported_token_address) {
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Select a supported token',
+            type: 'error',
+          },
+        })
+      )
+      return
+    }
+
+    if (tokenDecimals == null) {
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Token decimals unavailable',
+            type: 'error',
+          },
+        })
+      )
+      return
+    }
+
+    const cleanedPlans = plans
+      .map((plan) => ({
+        name: plan.name.trim(),
+        price: plan.price.trim(),
+        period_seconds: plan.period_seconds.trim()
+      }))
+      .filter((plan) => plan.name && plan.price && plan.period_seconds)
+      .map((plan) => ({
+        ...plan,
+        price: Number(plan.price),
+        period_seconds: Number(plan.period_seconds)
+      }))
+
+    if (cleanedPlans.length === 0) {
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Add at least one plan',
+            type: 'error',
+          },
+        })
+      )
+      return
+    }
+
+    const planNames = cleanedPlans.map((plan) => plan.name)
+    const planPrices = cleanedPlans.map((plan) => parseUnits(plan.price.toString(), tokenDecimals))
+    const planPeriods = cleanedPlans.map((plan) => BigInt(plan.period_seconds))
+    const planTokens = cleanedPlans.map(() => formData.supported_token_address as `0x${string}`)
+
+    let smartAccount = smartAccountResult?.smartAccount
+    if (!smartAccount) {
+      try {
+        const created = await createSmartAccount()
+        smartAccount = created?.smartAccount
+      } catch (error) {
+        console.error('Failed to initialize smart account', error)
+        window.dispatchEvent(
+          new CustomEvent('showToast', {
+            detail: {
+              message: 'Smart account not ready',
+              type: 'error',
+            },
+          })
+        )
+        return
+      }
+    }
+
+    if (!smartAccount) {
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Smart account unavailable',
+            type: 'error',
+          },
+        })
+      )
+      return
+    }
 
     setIsCreating(true)
+
     try {
+      const ownerAddress = smartAccount.address
+      const { txHash } = await deploySubscriptionManager(
+        smartAccount,
+        ownerAddress,
+        planNames,
+        planPrices,
+        planPeriods,
+        planTokens
+      )
+
       const result = await apiService.createProject({
         developer_email: userInfo.email,
-        ...formData
+        name: formData.name,
+        description: formData.description,
+        factory_tx_hash: txHash,
+        supported_token_address: formData.supported_token_address,
+        plans: cleanedPlans
       })
 
       if (result.success && result.data) {
@@ -131,7 +371,8 @@ const DeveloperDashboard = () => {
           success: true,
           message: 'Project created successfully!'
         })
-        setFormData({ name: '', description: '', subscription_manager_address: '', token_address: '' })
+        setFormData({ name: '', description: '', supported_token_address: '' })
+        setPlans([{ id: generatePlanId(), name: '', price: '', period_seconds: '' }])
         // Clear cache and refresh projects list
         const cacheKey = `developer_projects_${userInfo.email}`
         localStorage.removeItem(cacheKey)
@@ -142,13 +383,38 @@ const DeveloperDashboard = () => {
           setShowCreateForm(false)
           setCreateResult(null)
         }, 2000)
+        window.dispatchEvent(
+          new CustomEvent('showToast', {
+            detail: {
+              message: 'Project created successfully!',
+              type: 'success',
+            },
+          })
+        )
       } else {
         setCreateResult({
           success: false,
           message: result.error || 'Failed to create project'
         })
+        window.dispatchEvent(
+          new CustomEvent('showToast', {
+            detail: {
+              message: result.error || 'Failed to create project',
+              type: 'error',
+            },
+          })
+        )
       }
-    } catch {
+    } catch (error) {
+      console.error('Project creation failed', error)
+      window.dispatchEvent(
+        new CustomEvent('showToast', {
+          detail: {
+            message: 'Project creation failed',
+            type: 'error',
+          },
+        })
+      )
       setCreateResult({
         success: false,
         message: 'An error occurred while creating the project'
@@ -267,40 +533,192 @@ const DeveloperDashboard = () => {
               </div>
 
               <div>
-                <label className="block text-lg font-bold text-black mb-2">Subscription Manager Address</label>
-                <input
-                  type="text"
-                  value={formData.subscription_manager_address}
-                  onChange={(e) => setFormData({ ...formData, subscription_manager_address: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 text-lg font-medium"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    border: '2px solid #000000',
-                    boxShadow: '2px 2px 0px #000000'
-                  }}
-                  placeholder="0x..."
-                />
+                <label className="block text-lg font-bold text-black mb-2">Supported Token</label>
+                <div ref={tokenDropdownRef} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setIsTokenDropdownOpen((prev) => !prev)}
+                    disabled={isLoadingTokens}
+                    className="w-full px-4 py-3 text-lg font-medium flex items-center justify-between"
+                    style={{
+                      backgroundColor: '#ffffff',
+                      border: '2px solid #000000',
+                      boxShadow: '2px 2px 0px #000000'
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      {selectedToken?.image_url ? (
+                        <img
+                          src={selectedToken.image_url}
+                          alt={`${selectedToken.name} logo`}
+                          className="w-8 h-8 object-contain rounded-full border border-black"
+                        />
+                      ) : selectedToken ? (
+                        <div className="w-8 h-8 flex items-center justify-center rounded-full border border-black bg-gray-100 text-sm font-bold">
+                          {selectedToken.symbol.slice(0, 2).toUpperCase()}
+                        </div>
+                      ) : null}
+                      <span className="text-left">
+                        {selectedToken
+                          ? `${selectedToken.name} (${selectedToken.symbol})`
+                          : isLoadingTokens
+                            ? 'Loading tokens...'
+                            : 'Select a supported token'}
+                      </span>
+                    </div>
+                    <span className="text-xl leading-none ml-4">▾</span>
+                  </button>
+
+                  {isTokenDropdownOpen && (
+                    <div
+                      className="absolute z-20 mt-2 w-full bg-white border-2 border-black shadow-[2px_2px_0px_#000000] max-h-64 overflow-y-auto"
+                      style={{
+                        scrollbarWidth: 'thin'
+                      }}
+                    >
+                      {supportedTokens.length === 0 && !isLoadingTokens && (
+                        <div className="px-4 py-3 text-base font-medium text-gray-600">
+                          No supported tokens found
+                        </div>
+                      )}
+                      {supportedTokens.map((token) => {
+                        const isSelected = formData.supported_token_address === token.token_address
+                        return (
+                          <button
+                            key={token.id}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, supported_token_address: token.token_address })
+                              setIsTokenDropdownOpen(false)
+                            }}
+                            className={`w-full px-4 py-3 flex items-center text-left gap-3 transition-colors ${
+                              isSelected ? 'bg-gray-100' : 'hover:bg-gray-100'
+                            }`}
+                          >
+                            {token.image_url ? (
+                              <img
+                                src={token.image_url}
+                                alt={`${token.name} logo`}
+                                className="w-10 h-10 object-contain rounded-full border border-black"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 flex items-center justify-center rounded-full border border-black bg-gray-100 text-base font-bold">
+                                {token.symbol.slice(0, 2).toUpperCase()}
+                              </div>
+                            )}
+                            <div>
+                              <div className="text-lg font-bold text-black">{token.name}</div>
+                              <div className="text-sm font-medium text-gray-700">{token.symbol}</div>
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-lg font-bold text-black mb-2">Supported Token Address</label>
-                <input
-                  type="text"
-                  value={formData.token_address}
-                  onChange={(e) => setFormData({ ...formData, token_address: e.target.value })}
-                  required
-                  className="w-full px-4 py-3 text-lg font-medium"
-                  style={{
-                    backgroundColor: '#ffffff',
-                    border: '2px solid #000000',
-                    boxShadow: '2px 2px 0px #000000'
-                  }}
-                  placeholder="0x..."
-                />
-                <p className="text-sm text-gray-600 mt-2">
-                  Enter the contract address of a token already registered in Supported Tokens.
-                </p>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="block text-lg font-bold text-black">Subscription Plans</label>
+                  <motion.button
+                    type="button"
+                    onClick={() => setPlans((prev) => [...prev, { id: generatePlanId(), name: '', price: '', period_seconds: '' }])}
+                    whileHover={{ x: 1, y: 1, boxShadow: '1px 1px 0px #000000' }}
+                    whileTap={{ x: 2, y: 2, boxShadow: 'none' }}
+                    transition={{ duration: 0.1 }}
+                    className="px-4 py-2 text-sm font-bold"
+                    style={{
+                      backgroundColor: '#4ecdc4',
+                      border: '2px solid #000000',
+                      boxShadow: '2px 2px 0px #000000'
+                    }}
+                  >
+                    Add Plan
+                  </motion.button>
+                </div>
+
+                <div className="space-y-4">
+                  {plans.map((plan, index) => (
+                    <div
+                      key={plan.id}
+                      className="border-2 border-black p-4"
+                      style={{ boxShadow: '2px 2px 0px #000000', backgroundColor: '#f7f7f7' }}
+                    >
+                      <div className="flex justify-between items-center mb-3">
+                        <h3 className="font-black text-lg">Plan #{index + 1}</h3>
+                        {plans.length > 1 && (
+                          <motion.button
+                            type="button"
+                            onClick={() => setPlans((prev) => prev.filter((item) => item.id !== plan.id))}
+                            whileHover={{ scale: 1.05 }}
+                            whileTap={{ scale: 0.95 }}
+                            className="text-red-600"
+                          >
+                            <Trash2 size={18} />
+                          </motion.button>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-bold mb-2">Name</label>
+                          <input
+                            type="text"
+                            value={plan.name}
+                            onChange={(e) => setPlans((prev) => prev.map((item) => item.id === plan.id ? { ...item, name: e.target.value } : item))}
+                            required
+                            className="w-full px-3 py-2 text-sm font-medium"
+                            style={{
+                              backgroundColor: '#ffffff',
+                              border: '2px solid #000000',
+                              boxShadow: '2px 2px 0px #000000'
+                            }}
+                            placeholder="Premium"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold mb-2">Price (token units)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            value={plan.price}
+                            onChange={(e) => setPlans((prev) => prev.map((item) => item.id === plan.id ? { ...item, price: e.target.value } : item))}
+                            required
+                            className="w-full px-3 py-2 text-sm font-medium"
+                            style={{
+                              backgroundColor: '#ffffff',
+                              border: '2px solid #000000',
+                              boxShadow: '2px 2px 0px #000000'
+                            }}
+                            placeholder="10"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-bold mb-2">Period (seconds)</label>
+                          <input
+                            type="number"
+                            min="60"
+                            step="1"
+                            value={plan.period_seconds}
+                            onChange={(e) => setPlans((prev) => prev.map((item) => item.id === plan.id ? { ...item, period_seconds: e.target.value } : item))}
+                            required
+                            className="w-full px-3 py-2 text-sm font-medium"
+                            style={{
+                              backgroundColor: '#ffffff',
+                              border: '2px solid #000000',
+                              boxShadow: '2px 2px 0px #000000'
+                            }}
+                            placeholder="2592000"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="flex space-x-4">
@@ -359,7 +777,7 @@ const DeveloperDashboard = () => {
                   <p className="font-bold text-black">{createResult.message}</p>
                   {createResult.success && (
                     <p className="text-sm text-gray-600 mt-1">
-                      You can manage your API keys in the <button 
+                      You can access your project with API keys in the <button 
                         onClick={() => navigate('/home/developers/api-keys')}
                         className="text-blue-600 hover:text-blue-800 underline font-medium"
                       >

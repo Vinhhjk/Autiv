@@ -5,15 +5,17 @@ import type { SubscriptionPlan } from '../types/subscription'
 
 interface SubscriptionPlanCardProps {
   plan: SubscriptionPlan
-  onSelect: (planId: string) => void
+  onSelect?: (planId: string) => void
   isSelected?: boolean
   isLoading?: boolean
+  disabled?: boolean
 }
 
 export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
   plan,
   onSelect,
-  isLoading = false
+  isLoading = false,
+  disabled = false
 }) => {
   const getIcon = () => {
     switch (plan.id) {
@@ -65,7 +67,10 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
           border: '3px solid #000000',
           boxShadow: `4px 4px 0px ${shadowColors[0]}, 8px 8px 0px ${shadowColors[1]}`
         }}
-        onClick={() => onSelect(plan.id)}
+        onClick={() => {
+          if (disabled || !onSelect) return
+          onSelect(plan.id)
+        }}
       >
         {/* Token Logo */}
         <div className="relative mb-6">
@@ -78,13 +83,12 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
         </div>
 
         {/* Plan Details */}
-        <h3 className="text-4xl font-black text-black mb-4">
+        <h3 className="text-4xl font-black text-black mb-6">
           {plan.name}
         </h3>
-        <p className="text-gray-700 mb-8 text-xl font-medium">{plan.description}</p>
 
         {/* Price */}
-        <div className="mb-8">
+        <div className="mb-10">
           <div className="flex items-baseline">
             <span className="text-6xl font-black text-black">{plan.price}</span>
             <span className="text-3xl text-black ml-3 font-bold">USDC</span>
@@ -117,15 +121,16 @@ export const SubscriptionPlanCard: React.FC<SubscriptionPlanCardProps> = ({
         <button
           onClick={(e) => {
             e.stopPropagation()
+            if (disabled || !onSelect) return
             onSelect(plan.id)
           }}
-          disabled={isLoading}
+          disabled={isLoading || disabled}
           className={`
             retro-button w-full py-5 font-black text-xl transition-all duration-200
-            ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}
+            ${(isLoading || disabled) ? 'opacity-50 cursor-not-allowed' : ''}
           `}
         >
-          {isLoading ? 'Processing...' : 'Subscribe with Autiv!'}
+          {disabled ? 'Login to Subscribe' : isLoading ? 'Processing...' : 'Subscribe with Autiv!'}
         </button>
       </div>
     </motion.div>

@@ -5,6 +5,9 @@
 
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
+const SUBSCRIPTION_MANAGER_DEPLOYED_TOPIC = "0x38db265c0cf2a33c417051a7d0943e38a02b3db9f988689dd670bf6a1aa5e0cd";
+const PLAN_CREATED_TOPIC = "0x9e577f4ac885b769646db304f554e3503ca6b65d2bf0dc1aab2d40f42dca44d5";
+
 const NONCE_TTL_MS = 2 * 60 * 1000;
 
 // Durable Object for nonce management
@@ -949,15 +952,6 @@ async function handleRequest(req, env) {
         }
 
         const session = sessionResult.data.session;
-        if (!session || session.userEmail !== userEmail) {
-          return new Response(JSON.stringify({ success: false, error: "forbidden" }), {
-            status: 403,
-            headers: {
-              "Content-Type": "application/json",
-              "Access-Control-Allow-Origin": "*"
-            }
-          });
-        }
 
         if (session.status === 'paid') {
           const sanitized = sanitizePaymentSessionForClient(session)
@@ -1101,21 +1095,20 @@ async function handleRequest(req, env) {
         const createProjectData = await newReq.json();
         const createProjectResult = await createProject(env.XATA_API_KEY, createProjectData, env);
         return new Response(JSON.stringify(createProjectResult), {
-          status: 200,
+          status: createProjectResult?.success ? 200 : 400,
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
-          },
+          }
         });
-      case "/api/get-developer-projects":
-        const developer_email = newReq.headers.get("X-User-Email");
-        const projectsResult = await getDeveloperProjects(env.XATA_API_KEY, developer_email, env);
-        return new Response(JSON.stringify(projectsResult), {
+      case "/api/get-supported-tokens":
+        const tokensResult = await getSupportedTokens(env.XATA_API_KEY, env);
+        return new Response(JSON.stringify(tokensResult), {
           status: 200,
           headers: {
             "Content-Type": "application/json",
             "Access-Control-Allow-Origin": "*"
-          },
+          }
         });
       case "/api/create-api-key":
         const createApiKeyData = await newReq.json();
@@ -1151,6 +1144,16 @@ async function handleRequest(req, env) {
         const project_id = newReq.headers.get("X-Project-Id");
         const projectDetailsResult = await getProjectDetails(env.XATA_API_KEY, project_id, env);
         return new Response(JSON.stringify(projectDetailsResult), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*"
+          },
+        });
+      case "/api/get-developer-projects":
+        const developerProjectsEmail = newReq.headers.get("X-User-Email");
+        const developerProjectsResult = await getDeveloperProjects(env.XATA_API_KEY, developerProjectsEmail, env);
+        return new Response(JSON.stringify(developerProjectsResult), {
           status: 200,
           headers: {
             "Content-Type": "application/json",
@@ -1815,13 +1818,23 @@ async function cancelUserSubscription(xataApiKey, cancellationData, env) {
 // Create a new project
 async function createProject(xataApiKey, projectData, env) {
   try {
-    const { developer_email, name, description, subscription_manager_address, token_address } = projectData;
+    const {
+      developer_email,
+      name,
+      description,
+      factory_tx_hash,
+      plans,
+      supported_token_address
+    } = projectData;
 
-    // Find developer by email
+    if (!developer_email || !name || !factory_tx_hash || !Array.isArray(plans) || plans.length === 0 || !supported_token_address) {
+      return { success: false, error: "Missing required fields" };
+    }
+
     const developerResponse = await xataRequest("tables/developers/query", {
       method: "POST",
       body: JSON.stringify({
-        columns: ["id"],
+        columns: ["id", "smart_account_address"],
         filter: { email: developer_email },
         page: { size: 1 }
       })
@@ -1831,17 +1844,14 @@ async function createProject(xataApiKey, projectData, env) {
       return { success: false, error: "Developer not found" };
     }
 
-    const developerId = developerResponse.records[0].id;
-
-    if (!token_address) {
-      return { success: false, error: "Token address is required" };
-    }
+    const developerRecord = developerResponse.records[0];
+    const developerId = developerRecord.id;
 
     const supportedTokenResponse = await xataRequest("tables/supported_tokens/query", {
       method: "POST",
       body: JSON.stringify({
-        columns: ["id", "name", "symbol", "token_address"],
-        filter: { token_address },
+        columns: ["id", "name", "symbol", "token_address", "image_url"],
+        filter: { token_address: supported_token_address },
         page: { size: 1 }
       })
     }, xataApiKey, env);
@@ -1851,23 +1861,73 @@ async function createProject(xataApiKey, projectData, env) {
     }
 
     const supportedTokenRecord = supportedTokenResponse.records[0];
-    const supportedTokenId = supportedTokenRecord.id;
 
-    // Create project
+    const onchainResult = await inspectFactoryDeployment(factory_tx_hash, env, { expectedToken: supported_token_address, planCount: plans.length });
+
+    if (!onchainResult.success) {
+      return { success: false, error: onchainResult.error || "Failed to verify factory transaction" };
+    }
+
+    const { subscriptionManagerAddress, planIds } = onchainResult;
+
+    if (planIds.length !== plans.length) {
+      return { success: false, error: "Plan count mismatch between on-chain data and payload" };
+    }
+
     const projectResponse = await xataRequest("tables/projects/data", {
       method: "POST",
       body: JSON.stringify({
         developer_id: developerId,
-        supported_token_id: supportedTokenId,
-        name: name,
-        description: description,
-        subscription_manager_address: subscription_manager_address,
+        supported_token_id: supportedTokenRecord.id,
+        name,
+        description,
+        subscription_manager_address: subscriptionManagerAddress,
         is_active: true
       })
     }, xataApiKey, env);
 
-    return { 
-      success: true, 
+    const createdPlans = [];
+
+    for (let index = 0; index < plans.length; index++) {
+      const plan = plans[index];
+      const contractPlanId = planIds[index];
+
+      if (!plan?.name || plan?.price == null || plan?.period_seconds == null) {
+        continue;
+      }
+
+      const priceAsNumber = Number(plan.price);
+      const periodAsNumber = Number(plan.period_seconds);
+
+      if (Number.isNaN(priceAsNumber) || Number.isNaN(periodAsNumber)) {
+        continue;
+      }
+
+      const planResponse = await xataRequest("tables/subscription_plans/data", {
+        method: "POST",
+        body: JSON.stringify({
+          developer_id: developerId,
+          project_id: projectResponse.id,
+          contract_plan_id: contractPlanId,
+          name: plan.name,
+          price: priceAsNumber,
+          period_seconds: periodAsNumber,
+          token_address: supported_token_address,
+          token_symbol: supportedTokenRecord.symbol || null
+        })
+      }, xataApiKey, env);
+
+      createdPlans.push({
+        id: planResponse.id,
+        contract_plan_id: contractPlanId,
+        name: plan.name,
+        price: priceAsNumber,
+        period_seconds: periodAsNumber
+      });
+    }
+
+    return {
+      success: true,
       project: {
         id: projectResponse.id,
         name: projectResponse.name,
@@ -1877,13 +1937,173 @@ async function createProject(xataApiKey, projectData, env) {
           id: supportedTokenRecord.id,
           name: supportedTokenRecord.name,
           symbol: supportedTokenRecord.symbol,
-          token_address: supportedTokenRecord.token_address
-        }
+          token_address: supportedTokenRecord.token_address,
+          image_url: supportedTokenRecord.image_url || null
+        },
+        plans: createdPlans
       }
     };
   } catch (error) {
     console.error("Error creating project:", error);
     return { success: false, error: "Failed to create project" };
+  }
+}
+
+async function getSupportedTokens(xataApiKey, env) {
+  const response = await xataRequest("tables/supported_tokens/query", {
+    method: "POST",
+    body: JSON.stringify({
+      columns: ["id", "name", "symbol", "token_address", "image_url"],
+      page: { size: 200 }
+    })
+  }, xataApiKey, env);
+
+  return {
+    success: true,
+    tokens: cleanRecords(response.records)
+  };
+}
+
+async function jsonRpcRequest(rpcUrl, method, params = []) {
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: Date.now(),
+      method,
+      params,
+    }),
+  });
+
+  const payload = await response.json();
+
+  if (!response.ok) {
+    throw new Error(`RPC request failed with status ${response.status}`);
+  }
+
+  if (payload.error) {
+    const message = typeof payload.error === "string"
+      ? payload.error
+      : payload.error.message || JSON.stringify(payload.error);
+    throw new Error(`RPC error: ${message}`);
+  }
+
+  return payload.result;
+}
+
+function normalizeEventAddress(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const hex = value.startsWith("0x") ? value.slice(2) : value;
+  if (hex.length === 0) {
+    return null;
+  }
+
+  const trimmed = hex.padStart(40, "0").slice(-40);
+  return `0x${trimmed}`.toLowerCase();
+}
+
+function decodeAddressFromEventData(data, position = 0) {
+  if (typeof data !== "string") {
+    return null;
+  }
+
+  const hex = data.startsWith("0x") ? data.slice(2) : data;
+  const offset = position * 64;
+
+  if (hex.length < offset + 64) {
+    return null;
+  }
+
+  const word = hex.slice(offset, offset + 64);
+  return normalizeEventAddress(`0x${word.slice(-40)}`);
+}
+
+function decodeSubscriptionManagerDeployed(topics, data) {
+  if (!Array.isArray(topics) || topics.length < 3) {
+    return null;
+  }
+
+  const signature = topics[0]?.toLowerCase();
+  if (signature !== SUBSCRIPTION_MANAGER_DEPLOYED_TOPIC) {
+    return null;
+  }
+
+  const creator = normalizeEventAddress(topics[1]);
+  const owner = normalizeEventAddress(topics[2]);
+  const subscriptionManager = decodeAddressFromEventData(data, 0);
+
+  if (!creator || !owner || !subscriptionManager) {
+    return null;
+  }
+
+  return { creator, owner, subscriptionManager };
+}
+
+async function inspectFactoryDeployment(txHash, env, expected) {
+  try {
+    const rpcUrl = `https://monad-testnet.rpc.hypersync.xyz/${env.HYPERSYNC_API}`;
+    const factoryAddress = env.SUBSCRIPTION_MANAGER_FACTORY;
+
+    if (!factoryAddress) {
+      return { success: false, error: "Factory configuration missing" };
+    }
+
+    const receipt = await jsonRpcRequest(rpcUrl, "eth_getTransactionReceipt", [txHash]);
+
+    if (!receipt) {
+      return { success: false, error: "Transaction not found" };
+    }
+
+    if (receipt.status !== "0x1") {
+      return { success: false, error: "Factory transaction failed" };
+    }
+
+    if (!receipt.logs || receipt.logs.length === 0) {
+      return { success: false, error: "No logs found on transaction" };
+    }
+
+    const hasFactoryLog = receipt.logs.some((log) => log.address?.toLowerCase() === factoryAddress.toLowerCase());
+
+    if (!hasFactoryLog) {
+      return { success: false, error: "Factory log not found" };
+    }
+
+    const deploymentLog = receipt.logs.find((log) => log.address?.toLowerCase() === factoryAddress.toLowerCase());
+
+    if (!deploymentLog) {
+      return { success: false, error: "Factory deployment log not found" };
+    }
+
+    const deploymentInfo = decodeSubscriptionManagerDeployed(deploymentLog.topics, deploymentLog.data);
+
+    if (!deploymentInfo) {
+      return { success: false, error: "Failed to decode factory deployment log" };
+    }
+
+    const { subscriptionManager: subscriptionManagerAddress } = deploymentInfo;
+
+    const managerLogs = receipt.logs.filter((log) => log.address?.toLowerCase() === subscriptionManagerAddress.toLowerCase());
+
+    const planLogs = managerLogs.filter((log) => log.topics?.[0]?.toLowerCase() === PLAN_CREATED_TOPIC.toLowerCase());
+
+    if (expected?.planCount && planLogs.length !== expected.planCount) {
+      return { success: false, error: "Plan event count mismatch" };
+    }
+
+    const planIds = planLogs.map((log) => parseInt(log.topics[1], 16));
+
+    return {
+      success: true,
+      subscriptionManagerAddress,
+      planIds
+    };
+  } catch (error) {
+    console.error("inspectFactoryDeployment error", error);
+    return { success: false, error: "Failed to inspect factory deployment" };
   }
 }
 
@@ -2171,6 +2391,13 @@ async function getProjectDetails(xataApiKey, project_id, env) {
 
     const projectRecord = projectResponse.records[0];
 
+    const supportedTokenRecord = projectRecord.supported_token_id || null;
+    const cleanedSupportedToken = supportedTokenRecord
+      ? cleanRecords([supportedTokenRecord])[0]
+      : null;
+
+    const { xata, supported_token_id, ...projectBase } = projectRecord;
+
     // Get subscription plans for this project
     const plansResponse = await xataRequest("tables/subscription_plans/query", {
       method: "POST",
@@ -2181,22 +2408,23 @@ async function getProjectDetails(xataApiKey, project_id, env) {
       })
     }, xataApiKey, env);
 
+    const cleanedPlans = cleanRecords(plansResponse.records || []);
+    const normalizedPlans = cleanedPlans.map((plan) => ({
+      ...plan,
+      token_symbol: plan.token_symbol || cleanedSupportedToken?.symbol || null
+    }));
+
     return { 
       success: true,
       data: {
         project: {
-          id: projectRecord.id,
-          name: projectRecord.name,
-          description: projectRecord.description,
-          subscription_manager_address: projectRecord.subscription_manager_address,
-          supported_token: projectRecord.supported_token_id ? {
-            id: projectRecord.supported_token_id.id || projectRecord.supported_token_id.xata_id || null,
-            name: projectRecord.supported_token_id.name,
-            symbol: projectRecord.supported_token_id.symbol,
-            token_address: projectRecord.supported_token_id.token_address
-          } : null
+          id: projectBase.id,
+          name: projectBase.name,
+          description: projectBase.description,
+          subscription_manager_address: projectBase.subscription_manager_address,
+          supported_token: cleanedSupportedToken || null
         },
-        subscription_plans: plansResponse.records || []
+        subscription_plans: normalizedPlans
       }
     };
   } catch (error) {

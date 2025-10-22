@@ -47,16 +47,6 @@
           "name": "is_active",
           "type": "bool",
           "defaultValue": true
-        },
-        {
-          "name": "total_subscribers",
-          "type": "int",
-          "defaultValue": 0
-        },
-        {
-          "name": "total_revenue",
-          "type": "float",
-          "defaultValue": 0
         }
       ]
     },
@@ -325,6 +315,10 @@
           "type": "string",
           "notNull": true,
           "unique": true
+        },
+        {
+          "name": "image_url",
+          "type": "string"
         }
       ]
     },

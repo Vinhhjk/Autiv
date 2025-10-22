@@ -7,130 +7,94 @@ import type { SubscriptionPlan } from '../types/subscription'
 import { useAccount } from '../hooks/usePrivyWagmiAdapter'
 import DemoDashboard from '../components/DemoDashboard'
 import DemoViewToggle from '../components/DemoViewToggle'
+import { useSmartAccount } from '../hooks/useSmartAccount'
+import { useSmartAccountContractWriter } from '../hooks/useSmartAccountContractWriter'
+import { useAuth } from '../hooks/useAuth'
+
+type SmartAccount = {
+  address: `0x${string}`
+  isDeployed: () => Promise<boolean>
+  [key: string]: unknown
+}
 
 const Demo = () => {
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [activeView, setActiveView] = useState<'plans' | 'dashboard'>('plans')
   const [plans, setPlans] = useState<SubscriptionPlan[]>([])
-  const { getAllPlans, isLoading, error } = useSimpleContractReader()
   const { isConnected } = useAccount()
+  const { createSmartAccount, smartAccountResult } = useSmartAccount()
+  const { claimMockUSDCWithSmartAccount } = useSmartAccountContractWriter()
+  const { authenticated, isInitialized } = useAuth()
+  const [isClaiming, setIsClaiming] = useState(false)
+  const [claimStatus, setClaimStatus] = useState<'idle' | 'success' | 'error' | 'warning'>('idle')
+  const [claimMessage, setClaimMessage] = useState<string | null>(null)
+  const demoProjectId = import.meta.env.VITE_DEMO_PROJECT_ID || ''
+  const { getAllPlans, isLoading, error } = useSimpleContractReader(demoProjectId)
 
   const loadPlans = useCallback(async () => {
+    const storageKey = `demo_plans_loaded_${demoProjectId || 'default'}`
+    const alreadyLoaded = sessionStorage.getItem(storageKey)
+    const sharedFeatures = [
+      'MetaMask Smart Account integration',
+      'Automated subscription payments',
+      'USDC payment support',
+      'Basic support',
+      'Standard features'
+    ]
+    const fallbackPlans: SubscriptionPlan[] = [
+      {
+        id: '1',
+        name: '1 Minute Test',
+        price: 1,
+        duration: 60,
+        durationText: '1 minute',
+        features: sharedFeatures,
+        tokenSymbol: 'USDC'
+      },
+      {
+        id: '2',
+        name: '2 Minutes Test',
+        price: 2,
+        duration: 120,
+        durationText: '2 minutes',
+        features: sharedFeatures,
+        tokenSymbol: 'USDC'
+      },
+      {
+        id: '3',
+        name: '5 Minutes Test',
+        price: 5,
+        duration: 300,
+        durationText: '5 minutes',
+        features: sharedFeatures,
+        tokenSymbol: 'USDC'
+      }
+    ].map((plan) => ({ ...plan, description: '' } as SubscriptionPlan))
     try {
       const contractPlans = await getAllPlans()
       
       if (contractPlans && contractPlans.length > 0) {
         setPlans(contractPlans as SubscriptionPlan[])
-      } else {
-        // Fallback demo plans if contract has no plans or rate limited
-        console.log('Using fallback demo plans')
-        setPlans([
-          {
-            id: '0',
-            name: 'Basic Plan',
-            description: 'Get started with basic features',
-            price: 1,
-            duration: 1,
-            features: [
-              'MetaMask Smart Account integration',
-              'Automated subscription payments',
-              'USDC payment support',
-              'Basic support',
-              'Standard features'
-            ]
-          },
-          {
-            id: '1', 
-            name: 'Pro Plan',
-            description: 'Advanced features for professionals',
-            price: 5,
-            duration: 7,
-            features: [
-              'MetaMask Smart Account integration',
-              'Automated subscription payments', 
-              'USDC payment support',
-              'Priority support',
-              'Advanced features',
-              'Analytics dashboard'
-            ]
-          },
-          {
-            id: '2',
-            name: 'Enterprise Plan', 
-            description: 'Full enterprise solution',
-            price: 20,
-            duration: 30,
-            features: [
-              'MetaMask Smart Account integration',
-              'Automated subscription payments',
-              'USDC payment support', 
-              '24/7 premium support',
-              'All advanced features',
-              'Custom integrations',
-              'Dedicated account manager'
-            ]
-          }
-        ])
+        sessionStorage.setItem(storageKey, 'true')
+      } else if (!alreadyLoaded) {
+        setPlans(fallbackPlans)
       }
     } catch (err) {
       console.error('Error loading plans:', err)
-      
-      // Always show fallback plans on error
-      setPlans([
-        {
-          id: '0',
-          name: 'Basic Plan',
-          description: 'Get started with basic features',
-          price: 1,
-          duration: 1,
-          features: [
-            'MetaMask Smart Account integration',
-            'Automated subscription payments',
-            'USDC payment support',
-            'Basic support',
-            'Standard features'
-          ]
-        },
-        {
-          id: '1', 
-          name: 'Pro Plan',
-          description: 'Advanced features for professionals',
-          price: 5,
-          duration: 7,
-          features: [
-            'MetaMask Smart Account integration',
-            'Automated subscription payments', 
-            'USDC payment support',
-            'Priority support',
-            'Advanced features',
-            'Analytics dashboard'
-          ]
-        },
-        {
-          id: '2',
-          name: 'Enterprise Plan', 
-          description: 'Full enterprise solution',
-          price: 20,
-          duration: 30,
-          features: [
-            'MetaMask Smart Account integration',
-            'Automated subscription payments',
-            'USDC payment support', 
-            '24/7 premium support',
-            'All advanced features',
-            'Custom integrations',
-            'Dedicated account manager'
-          ]
-        }
-      ])
+      setPlans(fallbackPlans)
     }
-  }, [getAllPlans])
+  }, [demoProjectId, getAllPlans])
 
-  // Load plans when component mounts - only once
   useEffect(() => {
     loadPlans()
   }, [loadPlans])
+
+  useEffect(() => {
+    if (authenticated && isInitialized) {
+      loadPlans()
+    }
+  }, [authenticated, isInitialized, loadPlans])
 
   const handlePlanSelect = (planId: string) => {
     const plan = plans.find(p => p.id === planId)
@@ -139,6 +103,54 @@ const Demo = () => {
       setIsModalOpen(true)
     }
   }
+
+  const handleClaimTokens = useCallback(async () => {
+    if (!isConnected) {
+      setClaimStatus('warning')
+      setClaimMessage('Please login to claim tokens.')
+      return
+    }
+
+    try {
+      setIsClaiming(true)
+      setClaimStatus('idle')
+      setClaimMessage(null)
+
+      let smartAccount = smartAccountResult?.smartAccount as SmartAccount | undefined
+      if (!smartAccount) {
+        const created = await createSmartAccount()
+        if (!created?.smartAccount) {
+          throw new Error('Unable to initialize smart account')
+        }
+        smartAccount = created.smartAccount as SmartAccount
+      }
+
+      await claimMockUSDCWithSmartAccount(smartAccount)
+      setClaimStatus('success')
+      setClaimMessage(`Claimed!`)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to claim tokens'
+      setClaimStatus('error')
+      setClaimMessage(message)
+    } finally {
+      setIsClaiming(false)
+    }
+  }, [isConnected, createSmartAccount, smartAccountResult, claimMockUSDCWithSmartAccount])
+
+  const claimFeedback = claimStatus !== 'idle' && claimMessage ? (
+    <div
+      className="text-sm font-bold px-4 py-2"
+      style={
+        claimStatus === 'success'
+          ? { backgroundColor: '#d1fae5', border: '2px solid #10b981', color: '#065f46' }
+          : claimStatus === 'error'
+            ? { backgroundColor: '#fee2e2', border: '2px solid #f87171', color: '#7f1d1d' }
+            : { backgroundColor: '#fef3c7', border: '2px solid #facc15', color: '#78350f' }
+      }
+    >
+      {claimMessage}
+    </div>
+  ) : null
 
   return (
     <div className="min-h-screen pt-8 pb-20 px-4 sm:px-6 lg:px-8 relative">
@@ -152,10 +164,25 @@ const Demo = () => {
 
       <div className="max-w-7xl mx-auto relative">
         {/* View Toggle */}
-        <DemoViewToggle
-          activeView={activeView}
-          onViewChange={setActiveView}
-        />
+        <div className="mb-12">
+          <div className="flex justify-center">
+            <DemoViewToggle
+              activeView={activeView}
+              onViewChange={setActiveView}
+            />
+          </div>
+          <div className="mt-6 flex flex-col sm:flex-row justify-center items-center gap-3">
+            <button
+              onClick={handleClaimTokens}
+              disabled={isClaiming || !isConnected}
+              className={`retro-button px-6 py-3 font-black text-lg transition-all duration-200 ${(!isConnected || isClaiming) ? 'opacity-50 cursor-not-allowed' : ''}`}
+              style={{ backgroundColor: '#4ecdc4' }}
+            >
+              {isClaiming ? 'Claiming Mock USDC...' : 'Claim Mock USDC'}
+            </button>
+            {claimFeedback}
+          </div>
+        </div>
 
         {/* Conditional Content */}
         {activeView === 'dashboard' ? (
@@ -202,8 +229,8 @@ const Demo = () => {
               </div>
             )}
 
-            {/* Error State */}
-            {error && (
+            {/* Error State (only if no plans to show) */}
+            {error && plans.length === 0 && (
               <div className="bg-red-50 border-2 border-red-300 rounded-lg p-6 max-w-2xl mx-auto mb-8">
                 <h3 className="text-red-800 font-bold text-lg mb-2">Error Loading Plans</h3>
                 <p className="text-red-700">{error}</p>
@@ -211,7 +238,7 @@ const Demo = () => {
             )}
 
             {/* Plan Cards */}
-            {!isLoading && !error && (
+            {!isLoading && (
               <div className="grid md:grid-cols-3 gap-8 max-w-6xl mx-auto">
                 {plans && plans.length > 0 ? (
                   plans.map((plan, index) => (
@@ -223,8 +250,9 @@ const Demo = () => {
                     >
                       <SubscriptionPlanCard
                         plan={plan}
-                        onSelect={handlePlanSelect}
+                        onSelect={isConnected ? handlePlanSelect : undefined}
                         isSelected={selectedPlan?.id === plan.id}
+                        disabled={!isConnected}
                       />
                     </motion.div>
                   ))

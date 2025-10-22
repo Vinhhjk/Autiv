@@ -136,6 +136,43 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
       const contractConfigData = await loadContractConfig(projectId)
 
+      const subscriptionsResponse = await apiService.getUserSubscriptions()
+      if (!subscriptionsResponse.success || !subscriptionsResponse.data) {
+        throw new Error(subscriptionsResponse.error || 'Failed to check existing subscriptions')
+      }
+
+      const hasBlockingSubscription = subscriptionsResponse.data.subscriptions?.some(subscription => {
+        if (!subscription) return false
+        const status = (subscription.status || '').toLowerCase()
+        const isLatest = (subscription as unknown as { is_latest?: boolean }).is_latest ?? true
+        if (!isLatest) {
+          return false
+        }
+
+        const subscriptionProjectId = (subscription as unknown as { project_id?: string; projectId?: string }).project_id
+          ?? (subscription as unknown as { projectId?: string }).projectId
+
+        const projectMatches = subscriptionProjectId ? subscriptionProjectId === projectId : false
+        const managerMatches = subscription.subscription_manager_address
+          ? subscription.subscription_manager_address.toLowerCase() === contractConfigData.subscriptionManagerAddress.toLowerCase()
+          : false
+
+        const blockingStatus = status === 'active' || status === 'expired'
+
+        return blockingStatus && (projectMatches || managerMatches)
+      })
+
+      if (hasBlockingSubscription) {
+        setError('You already have a subscription for this project. Please cancel your existing subscription first.')
+        if (paymentWindowRef.current && !paymentWindowRef.current.closed) {
+          paymentWindowRef.current.close()
+        }
+        paymentWindowRef.current = null
+        setPopupBlocked(false)
+        setPendingPaymentUrl(null)
+        return
+      }
+
       const response = await apiService.createPaymentSession({
         project_id: projectId,
         contract_plan_id: contractPlanId,

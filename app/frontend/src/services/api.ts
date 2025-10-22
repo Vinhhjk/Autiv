@@ -25,11 +25,13 @@ interface UserInfo {
   email: string;
 }
 
-interface TokenMetadata {
+export interface TokenMetadata {
   id: string
   name: string
   symbol: string
   token_address: string
+  image_url?: string | null
+  decimals?: number | null
 }
 
 interface Project {
@@ -38,6 +40,7 @@ interface Project {
   description: string;
   subscription_manager_address: string;
   supported_token?: TokenMetadata | null;
+  plans?: SubscriptionPlan[];
 }
 
 interface ApiKey {
@@ -80,7 +83,7 @@ interface Developer {
 
 interface SubscriptionPlan {
   id: string;
-  developer_id: string;
+  developer_id?: string;
   contract_plan_id: number;
   name: string;
   price: number;
@@ -88,6 +91,16 @@ interface SubscriptionPlan {
   token_symbol?: string;
   period_seconds: number;
   is_active?: boolean;
+}
+
+interface CreateProjectPlanInput {
+  name: string;
+  price: number;
+  period_seconds: number;
+}
+
+interface CreateProjectResponse {
+  project: Project;
 }
 
 interface UserSubscriptionData {
@@ -190,17 +203,10 @@ class ApiService {
       }
 
       if (!response.ok) {
-        console.error("API request failed:", {
-          endpoint,
-          status: response.status,
-          statusText: response.statusText,
-          error: data.error || data,
-          responseText
-        });
         return {
           success: false,
           error:
-            data.error || `HTTP ${response.status}: ${response.statusText}`,
+            (data as { error?: string })?.error || `HTTP ${response.status}: ${response.statusText}`,
         };
       }
 
@@ -315,15 +321,24 @@ class ApiService {
     developer_email: string;
     name: string;
     description: string;
-    subscription_manager_address: string;
-    token_address: string;
-    token_name?: string;
-    token_symbol?: string;
-  }): Promise<ApiResponse<{ project: Project }>> {
+    factory_tx_hash: string;
+    supported_token_address: string;
+    plans: CreateProjectPlanInput[];
+  }): Promise<ApiResponse<CreateProjectResponse>> {
     return this.makeRequest("/api/create-project", {
       method: "POST",
       body: JSON.stringify(projectData),
     });
+  }
+
+  async getSupportedTokens(): Promise<ApiResponse<{ tokens: TokenMetadata[] }>> {
+    return this.makeRequest(
+      "/api/get-supported-tokens",
+      {
+        method: "POST",
+        body: "",
+      }
+    );
   }
 
   /**

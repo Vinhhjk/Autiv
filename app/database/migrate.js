@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 
 const { Pool } = pg;
 
-const SUBSCRIPTION_MANAGER_ADDRESS = '0xd8840e4A14fDd6833F213919ebF5727ee9E2E4dB';
+const SUBSCRIPTION_MANAGER_ADDRESS = '0xf1b9DEEF020bd528f29Fe102Ed99FE221E93b397';
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -40,9 +40,7 @@ async function createTables() {
         logo_url TEXT,
         description TEXT,
         is_verified BOOLEAN DEFAULT FALSE,
-        is_active BOOLEAN DEFAULT TRUE,
-        total_subscribers INTEGER DEFAULT 0,
-        total_revenue DECIMAL(20, 8) DEFAULT 0
+        is_active BOOLEAN DEFAULT TRUE
       );
     `);
     console.log("'developers' table created\n");
@@ -58,7 +56,8 @@ async function createTables() {
 
         name TEXT NOT NULL,
         symbol TEXT NOT NULL,
-        token_address TEXT NOT NULL UNIQUE
+        token_address TEXT NOT NULL UNIQUE,
+        image_url TEXT
       );
     `);
     console.log("'supported_tokens' table created\n");
@@ -113,7 +112,7 @@ async function createTables() {
         name TEXT NOT NULL,
         price DECIMAL(20, 8) NOT NULL,
         token_address TEXT NOT NULL,
-        token_symbol TEXT DEFAULT 'USDC',
+        token_symbol TEXT DEFAULT 'mUSDC',
         period_seconds INTEGER NOT NULL,
         is_active BOOLEAN DEFAULT TRUE,
         current_subscribers INTEGER DEFAULT 0
@@ -158,7 +157,7 @@ async function createTables() {
         developer_id TEXT NOT NULL REFERENCES developers(xata_id) ON DELETE CASCADE,
         amount DECIMAL(20, 8) NOT NULL,
         token_address TEXT NOT NULL,
-        token_symbol TEXT DEFAULT 'USDC',
+        token_symbol TEXT DEFAULT 'mUSDC',
         payment_date BIGINT NOT NULL,
         tx_hash TEXT UNIQUE NOT NULL
       );
@@ -364,11 +363,11 @@ async function seedSampleData() {
         SET name = EXCLUDED.name,
             symbol = EXCLUDED.symbol
         RETURNING xata_id;
-      `, ['USD Coin', 'USDC', '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B']);
+      `, ['Mock USDC', 'mUSDC', '0x145Ee5ed9BDd2C58EC03adADDCCd8C0253db60F3']);
 
       let supportedTokenId = supportedTokenResult.rows.length > 0 ? supportedTokenResult.rows[0].xata_id : null;
       if (!supportedTokenId) {
-        const res = await client.query(`SELECT xata_id FROM supported_tokens WHERE token_address = $1 LIMIT 1;`, ['0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B']);
+        const res = await client.query(`SELECT xata_id FROM supported_tokens WHERE token_address = $1 LIMIT 1;`, ['0x145Ee5ed9BDd2C58EC03adADDCCd8C0253db60F3']);
         if (res.rows.length > 0) {
           supportedTokenId = res.rows[0].xata_id;
         }
@@ -393,24 +392,16 @@ async function seedSampleData() {
           'Demo Project 1',
           'First demo project for testing',
           $3
-        ),
-        (
-          $1,
-          $2,
-          'Demo Project 2', 
-          'Second demo project for testing',
-          NULL
         )
         ON CONFLICT DO NOTHING
         RETURNING xata_id, name;
       `, [developerId, supportedTokenId, SUBSCRIPTION_MANAGER_ADDRESS]);
 
-      console.log("Sample projects created\n");
+      console.log("Sample project created\n");
 
-      // Insert sample subscription plans (linked to projects)
+      // Insert sample subscription plans (linked to the single project)
       if (projectResult.rows.length > 0) {
-        const firstProjectId = projectResult.rows[0].xata_id;
-        const secondProjectId = projectResult.rows.length > 1 ? projectResult.rows[1].xata_id : firstProjectId;
+        const projectId = projectResult.rows[0].xata_id;
 
         await client.query(`
           INSERT INTO subscription_plans (
@@ -428,7 +419,7 @@ async function seedSampleData() {
             1,
             '1 Minute Test',
             1.0,
-            '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B',
+            '0x145Ee5ed9BDd2C58EC03adADDCCd8C0253db60F3',
             60
           ),
           (
@@ -437,7 +428,7 @@ async function seedSampleData() {
             2,
             '2 Minutes Test',
             2.0,
-            '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B',
+            '0x145Ee5ed9BDd2C58EC03adADDCCd8C0253db60F3',
             120
           ),
           (
@@ -446,31 +437,13 @@ async function seedSampleData() {
             3,
             '5 Minutes Test',
             5.0,
-            '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B',
+            '0x145Ee5ed9BDd2C58EC03adADDCCd8C0253db60F3',
             300
-          ),
-          (
-            $1,
-            $3,
-            1,
-            'Starter Pack',
-            3.0,
-            '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B',
-            600
-          ),
-          (
-            $1,
-            $3,
-            2,
-            'Pro Pack',
-            6.0,
-            '0x861FFB58f5Bc14723FdD2D18F422fa2627b95F8B',
-            1200
           )
           ON CONFLICT DO NOTHING;
-        `, [developerId, firstProjectId, secondProjectId]);
+        `, [developerId, projectId]);
 
-        console.log("Sample subscription plans created (linked to projects)\n");
+        console.log("Sample subscription plans created (linked to project)\n");
       }
 
       // Insert sample API keys for the developer (not tied to specific projects)
