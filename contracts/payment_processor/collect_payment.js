@@ -420,11 +420,11 @@ async function startCollector() {
   }
 }
 
-if (import.meta.main) {
-  startCollector()
-    .catch(error => {
-      console.error('Collector failed', error);
-      process.exitCode = 1;
-    });
-}
+
+startCollector()
+  .catch(error => {
+    console.error('Collector failed', error);
+    process.exitCode = 1;
+  });
+
 
