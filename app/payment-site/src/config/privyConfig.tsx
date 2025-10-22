@@ -10,7 +10,7 @@ export const privyConfig = {
     appearance: {
       theme: 'light' as const,
       accentColor: '#676FFF' as `#${string}`,
-      logo: 'https://your-logo-url.com/logo.png',
+      logo: 'https://i.ibb.co/kVKCPyXt/autiv-logo.png',
     },
     
     // Simple embedded wallet configuration
